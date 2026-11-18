@@ -58,6 +58,12 @@ The history replay command finds docs-only commits with a nearby earlier source 
 
 It writes JSON and Markdown reports. The reported candidate match rate is a heuristic, not formal recall or precision: a docs-only commit near a code change is not guaranteed to be a drift fix. Review candidate pairs and findings before presenting the metric.
 
+## Run the public historical-replay evaluation
+
+Open the GitHub **Actions** tab and select **DocuGuard Historical Replay Evaluation**. Choose **Run workflow** and select the time window and candidate limit. The workflow checks out full Git history for `pallets/click` and `encode/httpx`, runs the replay tool against both projects, writes a combined Actions summary, and uploads the JSON/Markdown reports as an artifact.
+
+The report's candidate match rate is a heuristic, not formal recall or precision. Inspect the listed code/docs commit pairs before citing any metric. A docs-only commit near a code change may be unrelated.
+
 ## Limitations
 
 - Python scalar assignments and configuration dictionaries currently need to be simple assignments on changed lines. Dictionary option detection currently supports literal dictionaries on one line.

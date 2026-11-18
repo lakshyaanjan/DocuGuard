@@ -1,0 +1,105 @@
+name: DocuGuard Historical Replay Evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: Maximum days between a source change and a docs-only follow-up
+        required: false
+        default: "30"
+      max_pairs:
+        description: Maximum candidate pairs to replay per project
+        required: false
+        default: "10"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/historical-replay.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docuguard-historical-replay
+  cancel-in-progress: false
+
+jobs:
+  replay-public-projects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout DocuGuard
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Checkout Pallets Click history
+        uses: actions/checkout@v4
+        with:
+          repository: pallets/click
+          path: targets/click
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout Encode HTTPX history
+        uses: actions/checkout@v4
+        with:
+          repository: encode/httpx
+          path: targets/httpx
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run DocuGuard unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Replay historical candidates in Click
+        continue-on-error: true
+        run: |
+          python -m docuguard.history_replay \
+            --repo targets/click \
+            --window-days "${{ inputs.window_days || '30' }}" \
+            --max-pairs "${{ inputs.max_pairs || '10' }}" \
+            --max-history-commits 4000 \
+            --timeout 180 \
+            --output reports/click-history.json \
+            --markdown-out reports/click-history.md
+
+      - name: Replay historical candidates in HTTPX
+        continue-on-error: true
+        run: |
+          python -m docuguard.history_replay \
+            --repo targets/httpx \
+            --window-days "${{ inputs.window_days || '30' }}" \
+            --max-pairs "${{ inputs.max_pairs || '10' }}" \
+            --max-history-commits 4000 \
+            --timeout 180 \
+            --output reports/httpx-history.json \
+            --markdown-out reports/httpx-history.md
+
+      - name: Add combined evaluation summary
+        if: always()
+        run: |
+          echo '# DocuGuard public-repository historical replay' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          for report in reports/click-history.md reports/httpx-history.md; do
+            if [ -f "$report" ]; then
+              cat "$report" >> "$GITHUB_STEP_SUMMARY"
+              echo '' >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "No Markdown report was produced for $report." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Upload historical replay reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docuguard-public-repository-history
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 30
