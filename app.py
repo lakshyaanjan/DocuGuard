@@ -19,6 +19,11 @@ def build_parser():
     )
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parent,
                         help="Repository to analyse (defaults to this project).")
+    parser.add_argument(
+        "--docs-path",
+        type=Path,
+        help="Optional separate checkout containing documentation files."
+    )
     parser.add_argument("--html-out", type=Path,
                         help="Write a self-contained HTML report to this path.")
     parser.add_argument("--json-out", type=Path,
@@ -57,7 +62,8 @@ def main(argv=None):
     print("=" * 55)
     print("\nAnalyzing repository...\n")
 
-    findings = detect_documentation_drift(repository)
+    docs_path = args.docs_path.resolve() if args.docs_path else None
+    findings = detect_documentation_drift(repository, docs_path)
     suggestions = []
 
     for finding in findings:
