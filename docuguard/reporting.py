@@ -242,7 +242,7 @@ h1{margin:0;font-size:25px;letter-spacing:-.5px}.subtitle{color:#d4def0;font-siz
 .search-label,.section-label{display:block;color:#66758d;font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
 input[type=search]{width:100%;margin-top:7px;padding:11px 13px;border:1px solid #d7e0ed;border-radius:10px;background:#fbfcff;color:var(--ink);font:inherit;outline:none}
 input[type=search]:focus{border-color:#8199eb;box-shadow:0 0 0 3px #3858c81a}.filters{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}
-.filter{padding:7px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#4e5c72;font:600 12px inherit;cursor:pointer}
+.filter{padding:7px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#4e5c72;font:600 12px system-ui,sans-serif;cursor:pointer}
 .filter b{margin-left:5px;color:inherit}.filter:hover{border-color:#b9c8e7}.filter.active{border-color:#cbd7ff;background:var(--blue-soft);color:var(--blue)}
 .result-count{margin:12px 0 0;color:var(--muted);font-size:11px}
 .finding{margin:13px 0;padding:21px 23px;background:var(--panel);border:1px solid var(--line);border-left:4px solid #d1a24a;border-radius:15px;box-shadow:0 3px 12px #243a5910}
