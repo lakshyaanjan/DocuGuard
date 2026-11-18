@@ -4,7 +4,7 @@ __pycache__/
 venv/
 .env
 .pytest_cache/
-docuguard-report.html
-docuguard-report.json
+docuguard-*.html
+docuguard-*.json
 history-replay-report.json
 history-replay-report.md
