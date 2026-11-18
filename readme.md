@@ -26,7 +26,7 @@ Generate reports:
 
     python app.py --html-out docuguard-report.html --json-out docuguard-report.json
 
-Open docuguard-report.html in a browser for a self-contained responsive report. To analyse another checked-out Git repository, pass --repo PATH. If the code and docs are in different local checkouts, pass both --repo PATH and --docs-path PATH.
+Open docuguard-report.html in a browser for a self-contained responsive report. The HTML report includes searchable and filterable findings, before/after code-value evidence, and maintainer actions; it works offline with no external assets. To analyse another checked-out Git repository, pass --repo PATH. If the code and docs are in different local checkouts, pass both --repo PATH and --docs-path PATH.
 
 ## GitHub Actions user experience
 

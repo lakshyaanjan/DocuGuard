@@ -50,9 +50,27 @@ class ReportingTests(unittest.TestCase):
         self.assertNotIn("<script>alert(1)</script>", report)
         self.assertIn("test-repo", report)
 
+    def test_html_report_shows_code_comparison_and_filter_controls(self):
+        report = render_html_report([sample_finding()], [], "test-repo")
+        self.assertIn("Code value changed", report)
+        self.assertIn(">8000</code>", report)
+        self.assertIn(">9000</code>", report)
+        self.assertIn('id="report-search"', report)
+        self.assertIn('data-filter="likely_drift"', report)
+        self.assertIn('aria-live="polite"', report)
+        self.assertIn("applyFilters", report)
+
+    def test_html_report_escapes_code_values(self):
+        finding = sample_finding()
+        finding["old_value"] = "<img src=x onerror=alert(1)>"
+        report = render_html_report([finding], [], "test-repo")
+        self.assertIn("&lt;img src=x onerror=alert(1)&gt;", report)
+        self.assertNotIn("<img src=x onerror=alert(1)>", report)
+
     def test_empty_report_has_success_message(self):
         report = render_html_report([], [], "test-repo")
         self.assertIn("No documentation drift detected", report)
+        self.assertIn("ALL CLEAR", report)
 
     def test_json_report_is_written(self):
         with tempfile.TemporaryDirectory() as directory:
