@@ -1,4 +1,3 @@
-
 import ast
 import re
 from pathlib import Path
@@ -6,6 +5,7 @@ from pathlib import Path
 from .git_analyzer import analyze_repository
 from .content_extractor import extract_repository_content
 from .cli_analyzer import analyze_cli_changes
+from .value_utils import contains_value
 
 
 GENERIC_IDENTIFIER_TERMS = {
@@ -22,6 +22,23 @@ GENERIC_IDENTIFIER_TERMS = {
     "path",
     "timeout",
     "size"
+}
+
+
+# Small, explainable vocabulary bridges code identifiers and prose.
+CONCEPT_TERMS = {
+    "application": {"service", "app", "program"},
+    "port": {"listener", "listening"},
+    "timeout": {"wait", "duration"},
+    "host": {"hostname", "server"},
+    "url": {"endpoint", "address"},
+    "path": {"directory", "location"},
+    "size": {"limit", "capacity"},
+    "default": {"initial", "initially"},
+}
+
+KNOWN_ENTITY_ALIASES = {
+    "app": "application",
 }
 
 
@@ -64,22 +81,32 @@ def split_identifier(name):
     return set(re.findall(r"[a-zA-Z]+", name.lower()))
 
 
-def value_in_sentence(value, sentence):
-    """Check whether an old value appears in a documentation sentence."""
+def expand_identifier_concepts(identifier_words):
+    """Add known prose terms related to identifier concepts."""
 
-    value = str(value).strip()
-    sentence = sentence.lower()
+    expanded_words = set(identifier_words)
 
-    if not value:
-        return False
+    for word in identifier_words:
+        expanded_words.update(CONCEPT_TERMS.get(word, set()))
 
-    if value.isdigit():
-        return re.search(
-            rf"(?<!\w){re.escape(value)}(?!\w)",
-            sentence
-        ) is not None
+    return expanded_words
 
-    return value.lower() in sentence
+
+def has_conflicting_entity_label(sentence, identifier_words):
+    """Avoid matching a passage explicitly naming a different entity."""
+
+    labels = re.findall(
+        r"\b([A-Z]{2,})\s+(?:service|server|application|program)\b",
+        sentence
+    )
+
+    expanded_identifier_words = expand_identifier_concepts(identifier_words)
+
+    return any(
+        KNOWN_ENTITY_ALIASES.get(label.lower(), label.lower())
+        not in expanded_identifier_words
+        for label in labels
+    )
 
 
 def find_assignment_documentation_relationships(repo_path):
@@ -126,23 +153,32 @@ def find_assignment_documentation_relationships(repo_path):
                     continue
 
                 identifier_words = split_identifier(old["name"])
+                expanded_identifier_words = expand_identifier_concepts(
+                    identifier_words
+                )
 
                 for document in documentation:
 
                     sentence = document["content"]
+
+                    if has_conflicting_entity_label(
+                        sentence, identifier_words
+                    ):
+                        continue
+
                     sentence_words = set(
                         re.findall(r"[a-zA-Z]+", sentence.lower())
                     )
 
                     matched_terms = (
-                        identifier_words & sentence_words
+                        expanded_identifier_words & sentence_words
                     )
 
                     distinctive_terms = (
                         matched_terms - GENERIC_IDENTIFIER_TERMS
                     )
 
-                    old_value_found = value_in_sentence(
+                    old_value_found = contains_value(
                         old["value"], sentence
                     )
 
@@ -151,7 +187,7 @@ def find_assignment_documentation_relationships(repo_path):
 
                     confidence = (
                         0.95
-                        if matched_terms == identifier_words
+                        if identifier_words.issubset(sentence_words)
                         else 0.75
                     )
 
@@ -211,10 +247,7 @@ def find_cli_documentation_relationships(repo_path):
 
                 sentence = document["content"]
 
-                if not re.search(
-                    rf"(?<![\w-]){re.escape(old_flag)}(?![\w-])",
-                    sentence
-                ):
+                if not contains_value(old_flag, sentence):
                     continue
 
                 findings.append({

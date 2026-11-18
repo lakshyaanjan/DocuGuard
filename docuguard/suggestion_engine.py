@@ -1,18 +1,40 @@
-
 from pathlib import Path
 
 from .drift_detector import detect_documentation_drift
+from .value_utils import replace_value_once
+
+
+MIN_AUTOMATIC_SUGGESTION_CONFIDENCE = 0.85
+
+
+def _evidence(finding, new_value):
+    """Build consistent source references for a suggestion."""
+
+    code_change = finding["code_change"]
+
+    return {
+        "symbol": finding["symbol"],
+        "old_value": str(finding["old_value"]),
+        "new_value": new_value,
+        "code_file": code_change["file"],
+        "code_line": (
+            code_change.get("new_line")
+            or code_change.get("old_line")
+        ),
+        "documentation_file": finding["documentation"]["file"],
+        "documentation_line": finding["documentation"]["line"],
+        "confidence": finding.get("confidence")
+    }
 
 
 def generate_suggestion(finding):
-    """Generate a documentation correction from code evidence."""
+    """Generate a cautious correction from code and documentation evidence."""
 
     if finding["status"] != "likely_drift":
         return None
 
     old_value = str(finding["old_value"])
-    new_value = str(finding["new_value"])
-
+    new_value = finding["new_value"]
     sentence = finding["documentation"]["sentence"]
 
     # A removed flag without a replacement needs human judgement.
@@ -23,49 +45,40 @@ def generate_suggestion(finding):
                 f"The code removed {old_value} without a detected "
                 "replacement. The documentation may need rewriting."
             ),
-            "evidence": {
-                "symbol": finding["symbol"],
-                "old_value": old_value,
-                "new_value": None,
-                "code_file": finding["code_change"]["file"],
-                "code_line": finding["code_change"]["old_line"],
-                "documentation_file": finding["documentation"]["file"],
-                "documentation_line": finding["documentation"]["line"]
-            }
+            "evidence": _evidence(finding, None)
         }
 
-    # Only suggest a literal replacement when the old value
-    # occurs exactly once in the sentence.
-    if sentence.count(old_value) != 1:
+    confidence = finding.get("confidence", 1.0)
+    if confidence < MIN_AUTOMATIC_SUGGESTION_CONFIDENCE:
         return {
             "status": "manual_review_required",
-            "reason": "The old value does not occur exactly once.",
-            "evidence": {
-                "symbol": finding["symbol"],
-                "old_value": old_value,
-                "new_value": new_value,
-                "code_file": finding["code_change"]["file"],
-                "code_line": finding["code_change"]["new_line"],
-                "documentation_file": finding["documentation"]["file"],
-                "documentation_line": finding["documentation"]["line"]
-            }
+            "reason": (
+                f"The code-documentation relationship confidence is "
+                f"{confidence:.2f}, below the automatic suggestion "
+                f"threshold of {MIN_AUTOMATIC_SUGGESTION_CONFIDENCE:.2f}."
+            ),
+            "evidence": _evidence(finding, str(new_value))
         }
 
-    suggested_sentence = sentence.replace(old_value, new_value, 1)
+    suggested_sentence = replace_value_once(
+        finding["old_value"], new_value, sentence
+    )
+
+    if suggested_sentence is None:
+        return {
+            "status": "manual_review_required",
+            "reason": (
+                "The old value does not occur exactly once as a complete "
+                "value in the documentation sentence."
+            ),
+            "evidence": _evidence(finding, str(new_value))
+        }
 
     return {
         "status": "suggestion_generated",
         "original_sentence": sentence,
         "suggested_sentence": suggested_sentence,
-        "evidence": {
-            "symbol": finding["symbol"],
-            "old_value": old_value,
-            "new_value": new_value,
-            "code_file": finding["code_change"]["file"],
-            "code_line": finding["code_change"]["new_line"],
-            "documentation_file": finding["documentation"]["file"],
-            "documentation_line": finding["documentation"]["line"]
-        },
+        "evidence": _evidence(finding, str(new_value)),
         "explanation": (
             f"The code changed {finding['symbol']} "
             f"from {old_value} to {new_value}. "
