@@ -6,3 +6,5 @@ venv/
 .pytest_cache/
 docuguard-report.html
 docuguard-report.json
+history-replay-report.json
+history-replay-report.md

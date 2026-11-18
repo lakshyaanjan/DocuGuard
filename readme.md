@@ -26,7 +26,7 @@ Generate reports:
 
     python app.py --html-out docuguard-report.html --json-out docuguard-report.json
 
-Open docuguard-report.html in a browser for a self-contained responsive report. To analyse another checked-out Git repository, pass --repo PATH.
+Open docuguard-report.html in a browser for a self-contained responsive report. To analyse another checked-out Git repository, pass --repo PATH. If the code and docs are in different local checkouts, pass both --repo PATH and --docs-path PATH.
 
 ## GitHub Actions user experience
 
@@ -40,6 +40,23 @@ The pull-request workflow runs tests, analyses changes against the PR base, writ
 4. The relationship engine combines identifier terms, a small explainable terminology map, value evidence and a check for explicitly named unrelated services.
 5. The drift detector separates likely drift from historical references.
 6. The suggestion engine proposes only safe literal replacements; ambiguous dictionary-option table changes require a maintainer to add or remove a row manually.
+
+## Separate documentation checkout
+
+DocuGuard can read documentation from a different local checkout:
+
+    python app.py --repo ../project-source --docs-path ../project-docs --html-out report.html
+
+For a private documentation repository in GitHub Actions, add a checkout step for that repository and provide an appropriately scoped token through repository secrets. Do not hard-code a token in the workflow. Remote websites are not crawled directly; check out or export their source files first.
+
+## Historical replay
+
+The history replay command finds docs-only commits with a nearby earlier source change, checks out the original code-change commit in a temporary Git worktree, and runs the current DocuGuard against that historical code state:
+
+    python -m docuguard.history_replay --repo ../pallets-click --window-days 30 --max-pairs 20
+    python -m docuguard.history_replay --repo ../httpx --window-days 30 --max-pairs 20
+
+It writes JSON and Markdown reports. The reported candidate match rate is a heuristic, not formal recall or precision: a docs-only commit near a code change is not guaranteed to be a drift fix. Review candidate pairs and findings before presenting the metric.
 
 ## Limitations
 

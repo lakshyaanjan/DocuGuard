@@ -99,9 +99,9 @@ def generate_suggestion(finding):
     }
 
 
-def generate_all_suggestions(repo_path):
+def generate_all_suggestions(repo_path, docs_path=None):
     """Generate suggestions for all likely documentation drift findings."""
-    findings = detect_documentation_drift(repo_path)
+    findings = detect_documentation_drift(repo_path, docs_path)
     suggestions = []
     for finding in findings:
         suggestion = generate_suggestion(finding)

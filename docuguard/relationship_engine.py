@@ -216,11 +216,11 @@ def find_dictionary_option_relationships(old, new, file_change, documentation):
     return findings
 
 
-def find_assignment_documentation_relationships(repo_path):
+def find_assignment_documentation_relationships(repo_path, docs_path=None):
     """Connect changed assignments to potentially outdated documentation."""
     repository = Path(repo_path)
     changes = analyze_repository(repository)
-    documentation = extract_repository_content(repository)
+    documentation = extract_repository_content(docs_path or repository)
     findings = []
 
     for file_change in changes["files"]:
@@ -287,11 +287,11 @@ def find_assignment_documentation_relationships(repo_path):
     return findings
 
 
-def find_cli_documentation_relationships(repo_path):
+def find_cli_documentation_relationships(repo_path, docs_path=None):
     """Find documentation passages that mention removed CLI flags."""
     repository = Path(repo_path)
     cli_changes = analyze_cli_changes(repository)
-    documentation = extract_repository_content(repository)
+    documentation = extract_repository_content(docs_path or repository)
     findings = []
 
     for change in cli_changes:
@@ -329,11 +329,11 @@ def find_cli_documentation_relationships(repo_path):
     return findings
 
 
-def find_documentation_relationships(repo_path):
+def find_documentation_relationships(repo_path, docs_path=None):
     """Combine assignment-based and CLI-based documentation detection."""
     return (
-        find_assignment_documentation_relationships(repo_path)
-        + find_cli_documentation_relationships(repo_path)
+        find_assignment_documentation_relationships(repo_path, docs_path)
+        + find_cli_documentation_relationships(repo_path, docs_path)
     )
 
 

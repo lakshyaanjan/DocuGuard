@@ -102,9 +102,9 @@ def evaluate_finding(finding):
     return result
 
 
-def detect_documentation_drift(repo_path):
+def detect_documentation_drift(repo_path, docs_path=None):
     """Find and evaluate potential documentation drift."""
-    findings = find_documentation_relationships(repo_path)
+    findings = find_documentation_relationships(repo_path, docs_path)
     return [evaluate_finding(finding) for finding in findings]
 
 
