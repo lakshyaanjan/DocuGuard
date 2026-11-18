@@ -7,8 +7,8 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument(
-    "--old-name",
-    help="Launch the application using the old name option."
+    "--new-name",
+    help="Launch the application using the new name option."
 )
 
 args = parser.parse_args()

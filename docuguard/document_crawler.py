@@ -22,7 +22,7 @@ IGNORED_DIRECTORIES = {
 def discover_documents(repo_path):
     """Find documentation files inside a repository."""
 
-    repository = Path(repo_path)
+    repository = Path(repo_path).resolve()
     documents = []
 
     for file_path in repository.rglob("*"):
@@ -30,7 +30,12 @@ def discover_documents(repo_path):
         if not file_path.is_file():
             continue
 
-        if any(part in IGNORED_DIRECTORIES for part in file_path.parts):
+        relative_path = file_path.relative_to(repository)
+
+        if any(
+            part in IGNORED_DIRECTORIES
+            for part in relative_path.parts
+        ):
             continue
 
         if file_path.suffix.lower() in DOCUMENTATION_EXTENSIONS:
@@ -39,28 +44,29 @@ def discover_documents(repo_path):
     return documents
 
 
-def read_document(file_path):
-    """Read a document and preserve its line numbers."""
+def read_document(file_path, repo_path):
+    """Read a document and preserve relative paths and line numbers."""
 
     path = Path(file_path)
+    repository = Path(repo_path).resolve()
 
     try:
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return {
-            "file": str(path),
+            "file": str(path.relative_to(repository)),
             "error": "Unable to decode file as UTF-8",
             "lines": []
         }
 
     return {
-        "file": str(path),
+        "file": str(path.relative_to(repository)).replace("\\", "/"),
         "lines": [
             {
                 "line": number,
-                "content": content
+                "content": line
             }
-            for number, content in enumerate(content.splitlines(), start=1)
+            for number, line in enumerate(content.splitlines(), start=1)
         ]
     }
 
@@ -68,10 +74,11 @@ def read_document(file_path):
 def crawl_repository(repo_path):
     """Discover and read all supported documentation files."""
 
-    documents = discover_documents(repo_path)
+    repository = Path(repo_path).resolve()
+    documents = discover_documents(repository)
 
     return [
-        read_document(file_path)
+        read_document(file_path, repository)
         for file_path in documents
     ]
 
