@@ -11,7 +11,12 @@ from docuguard.drift_detector import (
 
 class DriftDetectorTests(unittest.TestCase):
 
-    def create_test_repository(self, documentation):
+    def create_test_repository(
+        self,
+        documentation,
+        old_code="APPLICATION_DEFAULT_PORT = 8000",
+        new_code="APPLICATION_DEFAULT_PORT = 9000"
+    ):
         """Create an isolated Git repository for a test."""
 
         temporary_directory = tempfile.TemporaryDirectory()
@@ -37,7 +42,7 @@ class DriftDetectorTests(unittest.TestCase):
         )
 
         (repo / "sample.py").write_text(
-            "APPLICATION_DEFAULT_PORT = 8000\n",
+            old_code + "\n",
             encoding="utf-8"
         )
 
@@ -61,7 +66,7 @@ class DriftDetectorTests(unittest.TestCase):
 
         # Simulate a code change.
         (repo / "sample.py").write_text(
-            "APPLICATION_DEFAULT_PORT = 9000\n",
+            new_code + "\n",
             encoding="utf-8"
         )
 
@@ -223,6 +228,66 @@ class DriftDetectorTests(unittest.TestCase):
         }
         evaluate_finding(finding)
         self.assertEqual(finding, original)
+
+    def test_detects_decimal_default_change(self):
+        temporary_directory, repo = self.create_test_repository(
+            "# Configuration\nThe application scale factor is 2.5.\n",
+            old_code="APPLICATION_SCALE_FACTOR = 2.5",
+            new_code="APPLICATION_SCALE_FACTOR = 3.0"
+        )
+        try:
+            findings = detect_documentation_drift(repo)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["old_value"], 2.5)
+            self.assertEqual(findings[0]["new_value"], 3.0)
+            self.assertEqual(findings[0]["status"], "likely_drift")
+        finally:
+            temporary_directory.cleanup()
+
+    def test_detects_string_default_change(self):
+        temporary_directory, repo = self.create_test_repository(
+            "# Configuration\nThe application host is localhost.\n",
+            old_code='APPLICATION_HOST = "localhost"',
+            new_code='APPLICATION_HOST = "127.0.0.1"'
+        )
+        try:
+            findings = detect_documentation_drift(repo)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["old_value"], "localhost")
+            self.assertEqual(findings[0]["new_value"], "127.0.0.1")
+            self.assertEqual(findings[0]["status"], "likely_drift")
+        finally:
+            temporary_directory.cleanup()
+
+    def test_detects_boolean_default_change(self):
+        temporary_directory, repo = self.create_test_repository(
+            "# Configuration\nThe application feature is enabled: True.\n",
+            old_code="APPLICATION_FEATURE_ENABLED = True",
+            new_code="APPLICATION_FEATURE_ENABLED = False"
+        )
+        try:
+            findings = detect_documentation_drift(repo)
+            self.assertEqual(len(findings), 1)
+            self.assertIs(findings[0]["old_value"], True)
+            self.assertIs(findings[0]["new_value"], False)
+            self.assertEqual(findings[0]["status"], "likely_drift")
+        finally:
+            temporary_directory.cleanup()
+
+    def test_detects_negative_default_change(self):
+        temporary_directory, repo = self.create_test_repository(
+            "# Configuration\nThe application timeout is -1 seconds.\n",
+            old_code="APPLICATION_TIMEOUT = -1",
+            new_code="APPLICATION_TIMEOUT = -2"
+        )
+        try:
+            findings = detect_documentation_drift(repo)
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["old_value"], -1)
+            self.assertEqual(findings[0]["new_value"], -2)
+            self.assertEqual(findings[0]["status"], "likely_drift")
+        finally:
+            temporary_directory.cleanup()
 
 
 if __name__ == "__main__":
