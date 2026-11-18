@@ -5,6 +5,8 @@ from pathlib import Path
 
 from .git_analyzer import analyze_repository
 from .content_extractor import extract_repository_content
+from .cli_analyzer import analyze_cli_changes
+
 
 GENERIC_IDENTIFIER_TERMS = {
     "default",
@@ -80,7 +82,7 @@ def value_in_sentence(value, sentence):
     return value.lower() in sentence
 
 
-def find_documentation_relationships(repo_path):
+def find_assignment_documentation_relationships(repo_path):
     """Connect changed assignments to potentially outdated documentation."""
 
     repository = Path(repo_path)
@@ -178,6 +180,85 @@ def find_documentation_relationships(repo_path):
                     })
 
     return findings
+
+
+def find_cli_documentation_relationships(repo_path):
+    """Find documentation passages that mention removed CLI flags."""
+
+    repository = Path(repo_path)
+
+    cli_changes = analyze_cli_changes(repository)
+    documentation = extract_repository_content(repository)
+
+    findings = []
+
+    for change in cli_changes:
+
+        removed_flags = change["removed_flags"]
+        added_flags = change["added_flags"]
+
+        replacement = (
+            added_flags[0]["flag"]
+            if len(added_flags) == 1
+            else None
+        )
+
+        for removed in removed_flags:
+
+            old_flag = removed["flag"]
+
+            for document in documentation:
+
+                sentence = document["content"]
+
+                if not re.search(
+                    rf"(?<![\w-]){re.escape(old_flag)}(?![\w-])",
+                    sentence
+                ):
+                    continue
+
+                findings.append({
+                    "type": "potential_documentation_drift",
+                    "symbol": old_flag,
+                    "old_value": old_flag,
+                    "new_value": replacement or "<removed>",
+                    "code_change": {
+                        "file": change["file"],
+                        "old_line": removed["line"],
+                        "new_line": (
+                            added_flags[0]["line"]
+                            if replacement
+                            else None
+                        )
+                    },
+                    "documentation": {
+                        "file": document["file"],
+                        "line": document["line"],
+                        "sentence": sentence
+                    },
+                    "matched_terms": [old_flag],
+                    "confidence": 0.99,
+                    "reason": (
+                        f"The code removed CLI flag {old_flag}, "
+                        "but the documentation still mentions it."
+                    )
+                })
+
+    return findings
+
+
+def find_documentation_relationships(repo_path):
+    """Combine assignment-based and CLI-based documentation detection."""
+
+    assignment_findings = (
+        find_assignment_documentation_relationships(repo_path)
+    )
+
+    cli_findings = (
+        find_cli_documentation_relationships(repo_path)
+    )
+
+    return assignment_findings + cli_findings
 
 
 if __name__ == "__main__":

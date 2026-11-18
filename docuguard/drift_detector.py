@@ -27,25 +27,35 @@ def evaluate_finding(finding):
     old_value = str(finding["old_value"]).lower()
     new_value = str(finding["new_value"]).lower()
 
-    # Check whether the sentence explicitly describes historical information.
     historical_context = [
         indicator
         for indicator in HISTORICAL_INDICATORS
         if indicator in sentence
     ]
 
-    # Check whether the documentation contains the new value.
-    new_value_present = new_value in sentence
+    # A removed flag has no replacement to compare against.
+    if new_value == "<removed>":
+        if historical_context:
+            finding["status"] = "needs_review"
+            finding["reason"] = (
+                "The removed CLI flag appears in historical context. "
+                "Manual review is needed."
+            )
+        else:
+            finding["status"] = "likely_drift"
+            finding["reason"] = (
+                f"The CLI flag {old_value} was removed from the code, "
+                "but the documentation still mentions it."
+            )
 
-    # If the new value is present, the documentation may already be updated.
-    if new_value_present:
+    # A replacement exists.
+    elif new_value in sentence:
         finding["status"] = "no_drift"
         finding["reason"] = (
-            "The documentation also contains the new value. "
+            "The documentation contains the replacement value. "
             "Manual review may be needed to understand the context."
         )
 
-    # Historical references should not automatically be flagged.
     elif historical_context:
         finding["status"] = "needs_review"
         finding["reason"] = (

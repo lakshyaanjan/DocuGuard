@@ -5,7 +5,7 @@ from .drift_detector import detect_documentation_drift
 
 
 def generate_suggestion(finding):
-    """Generate a documentation correction from verified code evidence."""
+    """Generate a documentation correction from code evidence."""
 
     if finding["status"] != "likely_drift":
         return None
@@ -15,11 +15,40 @@ def generate_suggestion(finding):
 
     sentence = finding["documentation"]["sentence"]
 
-    # Replace the old value only when it occurs exactly once.
+    # A removed flag without a replacement needs human judgement.
+    if new_value == "<removed>":
+        return {
+            "status": "manual_review_required",
+            "reason": (
+                f"The code removed {old_value} without a detected "
+                "replacement. The documentation may need rewriting."
+            ),
+            "evidence": {
+                "symbol": finding["symbol"],
+                "old_value": old_value,
+                "new_value": None,
+                "code_file": finding["code_change"]["file"],
+                "code_line": finding["code_change"]["old_line"],
+                "documentation_file": finding["documentation"]["file"],
+                "documentation_line": finding["documentation"]["line"]
+            }
+        }
+
+    # Only suggest a literal replacement when the old value
+    # occurs exactly once in the sentence.
     if sentence.count(old_value) != 1:
         return {
             "status": "manual_review_required",
-            "reason": "The old value does not occur exactly once."
+            "reason": "The old value does not occur exactly once.",
+            "evidence": {
+                "symbol": finding["symbol"],
+                "old_value": old_value,
+                "new_value": new_value,
+                "code_file": finding["code_change"]["file"],
+                "code_line": finding["code_change"]["new_line"],
+                "documentation_file": finding["documentation"]["file"],
+                "documentation_line": finding["documentation"]["line"]
+            }
         }
 
     suggested_sentence = sentence.replace(old_value, new_value, 1)
@@ -30,8 +59,8 @@ def generate_suggestion(finding):
         "suggested_sentence": suggested_sentence,
         "evidence": {
             "symbol": finding["symbol"],
-            "old_value": finding["old_value"],
-            "new_value": finding["new_value"],
+            "old_value": old_value,
+            "new_value": new_value,
             "code_file": finding["code_change"]["file"],
             "code_line": finding["code_change"]["new_line"],
             "documentation_file": finding["documentation"]["file"],
@@ -53,7 +82,6 @@ def generate_all_suggestions(repo_path):
     suggestions = []
 
     for finding in findings:
-
         suggestion = generate_suggestion(finding)
 
         if suggestion is not None:

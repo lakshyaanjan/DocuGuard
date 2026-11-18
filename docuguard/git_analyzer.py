@@ -1,11 +1,46 @@
 
+import os
 import subprocess
 from pathlib import Path
 import json
 
 
+def resolve_base_ref(repo_path, base_ref="HEAD"):
+    """Resolve the Git reference used as the comparison base."""
+
+    if base_ref != "HEAD":
+        return base_ref
+
+    configured_ref = os.environ.get("DOCUGUARD_BASE_REF")
+
+    if not configured_ref:
+        return base_ref
+
+    result = subprocess.run(
+        [
+            "git",
+            "rev-parse",
+            "--verify",
+            f"{configured_ref}^{{commit}}"
+        ],
+        cwd=repo_path,
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Could not resolve comparison base "
+            f"'{configured_ref}': {result.stderr}"
+        )
+
+    return result.stdout.strip()
+
+
 def get_git_diff(repo_path, base_ref="HEAD"):
-    """Get changes between the current working tree and a Git reference."""
+    """Get changes between the comparison base and working tree."""
+
+    base_ref = resolve_base_ref(repo_path, base_ref)
 
     result = subprocess.run(
         [
@@ -79,6 +114,8 @@ def parse_git_diff(diff_text):
 
 
 def analyze_repository(repo_path, base_ref="HEAD"):
+    base_ref = resolve_base_ref(repo_path, base_ref)
+
     diff = get_git_diff(repo_path, base_ref)
 
     return {
