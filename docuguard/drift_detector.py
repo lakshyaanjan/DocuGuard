@@ -1,7 +1,8 @@
-
+import re
 from pathlib import Path
 
 from .relationship_engine import find_documentation_relationships
+from .value_utils import contains_value
 
 
 HISTORICAL_INDICATORS = {
@@ -19,61 +20,78 @@ HISTORICAL_INDICATORS = {
 }
 
 
-def evaluate_finding(finding):
-    """Evaluate whether a documentation match looks like actual drift."""
+def find_historical_indicators(sentence):
+    """Find historical phrases as whole words/phrases, not substrings."""
 
-    sentence = finding["documentation"]["sentence"].lower()
+    indicators = []
+
+    for indicator in sorted(HISTORICAL_INDICATORS):
+        phrase = r"\s+".join(
+            re.escape(part) for part in indicator.split()
+        )
+        pattern = re.compile(
+            r"(?<!\w)" + phrase + r"(?!\w)",
+            re.IGNORECASE
+        )
+
+        if pattern.search(sentence):
+            indicators.append(indicator)
+
+    return indicators
+
+
+def evaluate_finding(finding):
+    """Evaluate a documentation match without mutating the input finding."""
+
+    result = dict(finding)
+    sentence = finding["documentation"]["sentence"]
 
     old_value = str(finding["old_value"]).lower()
-    new_value = str(finding["new_value"]).lower()
+    new_value = finding["new_value"]
 
-    historical_context = [
-        indicator
-        for indicator in HISTORICAL_INDICATORS
-        if indicator in sentence
-    ]
+    historical_context = find_historical_indicators(sentence)
 
     # A removed flag has no replacement to compare against.
     if new_value == "<removed>":
         if historical_context:
-            finding["status"] = "needs_review"
-            finding["reason"] = (
+            result["status"] = "needs_review"
+            result["reason"] = (
                 "The removed CLI flag appears in historical context. "
                 "Manual review is needed."
             )
         else:
-            finding["status"] = "likely_drift"
-            finding["reason"] = (
+            result["status"] = "likely_drift"
+            result["reason"] = (
                 f"The CLI flag {old_value} was removed from the code, "
                 "but the documentation still mentions it."
             )
 
-    # A replacement exists.
-    elif new_value in sentence:
-        finding["status"] = "no_drift"
-        finding["reason"] = (
+    # Require the complete replacement value, not a substring.
+    elif contains_value(new_value, sentence):
+        result["status"] = "no_drift"
+        result["reason"] = (
             "The documentation contains the replacement value. "
             "Manual review may be needed to understand the context."
         )
 
     elif historical_context:
-        finding["status"] = "needs_review"
-        finding["reason"] = (
+        result["status"] = "needs_review"
+        result["reason"] = (
             "The documentation contains language suggesting "
             "a historical reference to the old value."
         )
 
     else:
-        finding["status"] = "likely_drift"
-        finding["reason"] = (
+        result["status"] = "likely_drift"
+        result["reason"] = (
             "The documentation contains the old value but not "
             "the new value, and no obvious historical indicator "
             "was detected."
         )
 
-    finding["historical_indicators"] = historical_context
+    result["historical_indicators"] = historical_context
 
-    return finding
+    return result
 
 
 def detect_documentation_drift(repo_path):
