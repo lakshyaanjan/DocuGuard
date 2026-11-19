@@ -82,6 +82,18 @@ class LLMClientTests(unittest.TestCase):
                 "https://generativelanguage.googleapis.com/v1beta/openai",
             )
 
+    def test_gemini_key_takes_precedence_for_gemini_endpoint(self):
+        with patch.dict(
+            os.environ,
+            {
+                "DOCUGUARD_OPENAI_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+                "OPENAI_API_KEY": "wrong-provider-key",
+                "GEMINI_API_KEY": "gemini-provider-key",
+            },
+            clear=True,
+        ):
+            self.assertEqual(get_api_key(), "gemini-provider-key")
+
     def test_missing_key_fails_clearly(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(LLMError, "No API key"):
