@@ -1,7 +1,9 @@
-"""Minimal, dependency-free client for OpenAI's Responses and Embeddings APIs.
+"""Dependency-free client for OpenAI-compatible chat and embeddings APIs.
 
 Credentials are read only from the environment. Requests are never logged and
 API keys are never written to the repository or DocuGuard's project index.
+Google AI Studio's Gemini API is supported through its OpenAI-compatible
+Chat Completions and Embeddings endpoints.
 """
 
 from __future__ import annotations
@@ -23,7 +25,12 @@ class LLMError(RuntimeError):
 
 
 def get_api_key() -> str | None:
-    return os.environ.get("DOCUGUARD_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    return (
+        os.environ.get("DOCUGUARD_OPENAI_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+    )
 
 
 def get_model() -> str:
@@ -52,7 +59,8 @@ def _post_json(endpoint: str, payload: dict, *, timeout: int = 90) -> dict:
     api_key = get_api_key()
     if not api_key:
         raise LLMError(
-            "No API key is configured. Set OPENAI_API_KEY or DOCUGUARD_OPENAI_API_KEY."
+            "No API key is configured. Set OPENAI_API_KEY, GEMINI_API_KEY, "
+            "or DOCUGUARD_OPENAI_API_KEY."
         )
     url = f"{get_api_base()}/{endpoint.lstrip('/')}"
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -100,7 +108,6 @@ def create_embeddings(texts: list[str], model: str | None = None) -> list[list[f
         {
             "model": selected_model,
             "input": texts,
-            "encoding_format": "float",
         },
     )
     data = response.get("data")
@@ -120,19 +127,29 @@ def create_embeddings(texts: list[str], model: str | None = None) -> list[list[f
 
 
 def _response_text(response: dict) -> str:
-    """Read text blocks from a Responses API result without assuming block order."""
-    pieces = []
-    for item in response.get("output", []):
-        if item.get("type") != "message":
-            continue
-        for block in item.get("content", []):
-            if block.get("type") == "refusal":
-                raise LLMError("The model refused to analyse the supplied change.")
-            if block.get("type") == "output_text" and isinstance(block.get("text"), str):
-                pieces.append(block["text"])
-    if not pieces:
-        raise LLMError("Model response contained no assistant output text.")
-    return "\n".join(pieces).strip()
+    """Read assistant text from a Chat Completions response."""
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        raise LLMError("Model response contained no chat completion choices.")
+    message = choices[0].get("message")
+    if not isinstance(message, dict):
+        raise LLMError("Model response contained no assistant message.")
+    if message.get("refusal"):
+        raise LLMError("The model refused to analyse the supplied change.")
+
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        return content.strip()
+    if isinstance(content, list):
+        pieces = [
+            item.get("text", "")
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        ]
+        joined = "\n".join(piece for piece in pieces if piece).strip()
+        if joined:
+            return joined
+    raise LLMError("Model response contained no assistant output text.")
 
 
 def create_structured_response(
@@ -141,14 +158,13 @@ def create_structured_response(
     *,
     model: str | None = None,
 ) -> dict:
-    """Ask the Responses API for a JSON object constrained by a strict schema."""
+    """Ask a Chat Completions-compatible API for schema-constrained JSON."""
     selected_model = model or get_model()
     response = _post_json(
-        "responses",
+        "chat/completions",
         {
             "model": selected_model,
-            "store": False,
-            "input": [
+            "messages": [
                 {
                     "role": "system",
                     "content": (
@@ -160,18 +176,16 @@ def create_structured_response(
                 },
                 {"role": "user", "content": prompt},
             ],
-            "text": {
-                "format": {
-                    "type": "json_schema",
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
                     "name": "docuguard_semantic_review",
                     "strict": True,
                     "schema": schema,
-                }
+                },
             },
         },
     )
-    if response.get("status") == "incomplete":
-        raise LLMError("Model response was incomplete; increase the configured output budget/model.")
     try:
         parsed = json.loads(_response_text(response))
     except json.JSONDecodeError as error:
