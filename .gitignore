@@ -8,3 +8,4 @@ docuguard-*.html
 docuguard-*.json
 history-replay-report.json
 history-replay-report.md
+.docuguard/

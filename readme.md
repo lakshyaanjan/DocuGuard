@@ -99,3 +99,18 @@ The report's candidate match rate is a heuristic, not formal recall or precision
     app.py
 
 Add the license chosen by the project maintainers before public release.
+## Ingest a project for future RAG analysis
+
+DocuGuard now includes a separate ingestion prototype. It can read a local checkout, an HTTPS GitHub repository, or a ZIP archive, and can take documentation from the same or a separate source:
+
+```bash
+python -m docuguard.ingestion --repo ../my-project --project-name MyProject
+python -m docuguard.ingestion --repo ../my-project --docs-path ../my-project-docs
+python -m docuguard.ingestion --repo-url https://github.com/owner/project --branch main
+python -m docuguard.ingestion --repo-zip ./source.zip --docs-zip ./docs.zip
+python -m docuguard.ingestion --repo ../my-project --docs-website https://docs.example.com/
+```
+
+The default output is `.docuguard/index/<project_id>/<snapshot_id>/`, containing `manifest.json`, `files.jsonl`, `chunks.jsonl`, `summaries.jsonl` and `project_summary.json`. Chunks preserve file paths, line ranges, source commit IDs and content hashes. Markdown/RST/HTML prose, tables and code examples are extracted; public static documentation sites can be crawled with a bounded same-origin HTML fetch; Python functions, classes, assignments, comments and docstrings are indexed; common non-Python source comments and bounded code blocks are collected on a best-effort basis.
+
+Per-file summaries are currently extractive, not AI-generated. No embeddings, vector database or LLM are used yet. See [the ingestion/data model guide](docs/INGESTION_AND_DATA_MODEL.md) for the storage schema, safety limits and future webpage/RAG integration contract.
