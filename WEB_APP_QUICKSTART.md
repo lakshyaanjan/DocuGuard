@@ -22,6 +22,16 @@ Streamlit opens the app in your browser, normally at http://localhost:8501.
 
 For a local repository with uncommitted changes, use `HEAD` as the comparison reference. The local folder must contain Git metadata. A regular ZIP download of a code repository does not contain Git history and cannot be used as the code source.
 
+## Guaranteed demo finding
+
+To create a small local Git repository containing one intentional port-documentation mismatch:
+
+```powershell
+python examples/create_web_demo.py
+```
+
+Copy the printed folder path into the web app, keep the comparison reference at `HEAD~1`, and select **Inside the code repository**. The expected result is a finding that the application port changed from 8000 to 9090 while the README still says 8000.
+
 ## Current scope
 
 The web interface currently runs deterministic checks only (no API key or source-code upload to an AI provider). Detection is strongest for the Python scalar/configuration changes and literal argparse flag changes handled by the existing DocuGuard engine. Public GitHub code repositories are cloned with the latest commit and its parent so `HEAD~1` can be analysed. Large repositories may take longer to clone.
