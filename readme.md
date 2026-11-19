@@ -74,7 +74,7 @@ To enable Gemini embeddings as well, set DOCUGUARD_USE_EMBEDDINGS to true and re
 
 For an OpenAI API key, set OPENAI_API_KEY and use the default API base/model, or configure DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL for another provider that supports Chat Completions structured outputs and embeddings.
 
-For GitHub Actions, add the relevant provider key as a repository secret. For Gemini, add `GEMINI_API_KEY`, then add repository variables `DOCUGUARD_OPENAI_BASE_URL` and `DOCUGUARD_LLM_MODEL` with the Gemini values above. The historical replay workflow uses `required` mode so provider failures are reported rather than silently falling back.
+Routine pull-request checks run deterministic/offline to avoid spending provider quota on every code review. For Gemini-powered historical replay, add `GEMINI_API_KEY` as a repository secret and add repository variables `DOCUGUARD_OPENAI_BASE_URL` and `DOCUGUARD_LLM_MODEL` with the Gemini values above.
 
 Analysis modes:
 
@@ -134,7 +134,7 @@ Versioned snapshots are stored below .docuguard/index/ and preserve chunks, cont
 
 The GitHub Actions workflow **DocuGuard Historical Replay Evaluation** replays candidate code-change/docs-only-fix pairs from two public projects: pallets/click and encode/httpx. Start it manually in the Actions tab and inspect both reports.
 
-The replay miner compares added and removed documentation text with source-code changes, selecting a related prior code change rather than blindly pairing the nearest commit. Its default search window is 365 days, and its workflow uses required LLM mode so API failures cannot silently fall back to deterministic checks. The candidate match rate is still not formal precision or recall: inspect the shared terms and each pair before reporting a score.
+The replay miner compares added and removed documentation text with source-code changes, selecting a related prior code change rather than blindly pairing the nearest commit. Its default search window is 365 days, and its workflow uses required LLM mode so API failures cannot silently fall back to deterministic checks. The candidate match rate is still not formal precision or recall: inspect the shared terms and each pair before reporting a score. The model client retries transient provider errors (HTTP 408, 425, 429, 500, 502, 503 and 504) up to three attempts. The workflow defaults to `auto`: if the provider remains unavailable, it reports deterministic fallback explicitly rather than counting it as a Gemini result. Choose `required` in the workflow inputs for an LLM-only run.
 
 ## Design and safety
 

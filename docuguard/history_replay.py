@@ -229,6 +229,17 @@ def find_replay_candidates(
     return candidates
 
 
+def classify_llm_runtime(mode, model_configured, fallback_detected):
+    """Describe the observed model path without overstating model usage."""
+    if mode == "off":
+        return "deterministic_only"
+    if not model_configured:
+        return "deterministic_only_no_api_key"
+    if fallback_detected:
+        return "deterministic_fallback_after_llm_error"
+    return "llm_configured_no_fallback_warning"
+
+
 def replay_candidate(repository, candidate, timeout_seconds=120, llm_mode=None):
     """Run DocuGuard at the original code-change state and retain run evidence."""
     repository = Path(repository).resolve()
@@ -291,6 +302,9 @@ def replay_candidate(repository, candidate, timeout_seconds=120, llm_mode=None):
             ]
             model_line = re.search(r"LLM: enabled \(([^)]+)\)", process.stdout)
             fallback_detected = "LLM layer was unavailable" in (process.stderr or "")
+            llm_runtime_status = classify_llm_runtime(
+                mode, model_line is not None, fallback_detected
+            )
 
             return {
                 **candidate,
@@ -303,6 +317,7 @@ def replay_candidate(repository, candidate, timeout_seconds=120, llm_mode=None):
                 "llm_mode": mode,
                 "llm_model": model_line.group(1) if model_line else None,
                 "llm_fallback_detected": fallback_detected,
+                "llm_runtime_status": llm_runtime_status,
                 "llm_semantic_finding_count": sum(
                     finding.get("analysis_source") == "llm_semantic"
                     for finding in findings
@@ -361,6 +376,7 @@ def render_replay_markdown(results, repository_name):
             f"- LLM mode: {item.get('llm_mode', 'unknown')}",
             f"- LLM model: {item.get('llm_model') or 'not reported'}",
             f"- LLM fallback warning: {'yes' if item.get('llm_fallback_detected') else 'no'}",
+            f"- Observed analysis path: {item.get('llm_runtime_status', 'unknown')}",
             f"- Semantic findings: {item.get('llm_semantic_finding_count', 0)}",
             ""
         ])

@@ -10,10 +10,29 @@ from docuguard.history_replay import (
     is_documentation_only,
     changed_text_tokens,
     score_change_relevance,
+    classify_llm_runtime,
 )
 
 
 class HistoryReplayTests(unittest.TestCase):
+
+    def test_llm_runtime_status_distinguishes_provider_fallback(self):
+        self.assertEqual(
+            classify_llm_runtime("auto", True, True),
+            "deterministic_fallback_after_llm_error",
+        )
+        self.assertEqual(
+            classify_llm_runtime("auto", True, False),
+            "llm_configured_no_fallback_warning",
+        )
+        self.assertEqual(
+            classify_llm_runtime("auto", False, False),
+            "deterministic_only_no_api_key",
+        )
+        self.assertEqual(
+            classify_llm_runtime("off", True, False),
+            "deterministic_only",
+        )
 
     def test_documentation_only_classifier(self):
         self.assertTrue(is_documentation_only(["README.md", "docs/setup.rst"]))
