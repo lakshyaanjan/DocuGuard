@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -18,6 +19,8 @@ from urllib.request import Request, urlopen
 
 DEFAULT_MODEL = "gpt-6.2-astra"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+RETRYABLE_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504}
+MAX_API_ATTEMPTS = 3
 
 
 class LLMError(RuntimeError):
@@ -68,6 +71,7 @@ def get_api_base() -> str:
 
 
 def _post_json(endpoint: str, payload: dict, *, timeout: int = 90) -> dict:
+    """POST JSON, retrying short-lived provider overload and rate-limit errors."""
     api_key = get_api_key()
     if not api_key:
         raise LLMError(
@@ -87,16 +91,36 @@ def _post_json(endpoint: str, payload: dict, *, timeout: int = 90) -> dict:
         },
         method="POST",
     )
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            raw = response.read(20 * 1024 * 1024 + 1)
-    except HTTPError as error:
-        detail = error.read(4000).decode("utf-8", errors="replace")
-        detail = detail.replace(api_key, "[redacted]")
-        raise LLMError(f"Model API returned HTTP {error.code}: {detail[:1000]}") from error
-    except (URLError, TimeoutError, socket.timeout, OSError) as error:
-        raise LLMError(f"Could not reach the configured model API: {error}") from error
 
+    raw = None
+    for attempt in range(MAX_API_ATTEMPTS):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                raw = response.read(20 * 1024 * 1024 + 1)
+            break
+        except HTTPError as error:
+            detail = error.read(4000).decode("utf-8", errors="replace")
+            detail = detail.replace(api_key, "[redacted]")
+            if error.code in RETRYABLE_HTTP_STATUSES and attempt < MAX_API_ATTEMPTS - 1:
+                # Bounded exponential backoff: 0.8s, then 1.6s.
+                time.sleep(0.8 * (2 ** attempt))
+                continue
+            attempts = attempt + 1
+            raise LLMError(
+                f"Model API returned HTTP {error.code} after {attempts} attempt(s): "
+                f"{detail[:1000]}"
+            ) from error
+        except (URLError, TimeoutError, socket.timeout, OSError) as error:
+            if attempt < MAX_API_ATTEMPTS - 1:
+                time.sleep(0.8 * (2 ** attempt))
+                continue
+            raise LLMError(
+                f"Could not reach the configured model API after "
+                f"{MAX_API_ATTEMPTS} attempts: {error}"
+            ) from error
+
+    if raw is None:
+        raise LLMError("Model API request ended without a response.")
     if len(raw) > 20 * 1024 * 1024:
         raise LLMError("Model API response exceeded the 20 MiB safety limit.")
     try:
@@ -106,7 +130,6 @@ def _post_json(endpoint: str, payload: dict, *, timeout: int = 90) -> dict:
     if not isinstance(result, dict):
         raise LLMError("Model API returned an unexpected response shape.")
     return result
-
 
 def create_embeddings(texts: list[str], model: str | None = None) -> list[list[float]]:
     """Create ordered float embeddings; empty input causes no network request."""
