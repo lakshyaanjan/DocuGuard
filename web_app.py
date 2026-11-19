@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import tempfile
 from contextlib import ExitStack
 from pathlib import Path
@@ -13,6 +14,50 @@ from docuguard.ingestion.sources import SourceError, resolve_source
 from docuguard.llm_client import LLMError
 from docuguard.reporting import render_html_report
 from docuguard.suggestion_engine import generate_suggestion
+
+
+def create_builtin_demo(repository: Path) -> None:
+    """Create an isolated Git fixture with one intentional stale README value."""
+    repository.mkdir(parents=True, exist_ok=True)
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(repository), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    def commit(message: str) -> None:
+        subprocess.run(
+            [
+                "git", "-C", str(repository),
+                "-c", "user.name=DocuGuard Demo",
+                "-c", "user.email=demo@docuguard.local",
+                "commit", "-m", message,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    git("init")
+    git("branch", "-M", "main")
+    (repository / "server.py").write_text(
+        "APPLICATION_DEFAULT_PORT = 8000\\n", encoding="utf-8"
+    )
+    (repository / "README.md").write_text(
+        "# Demo application\\n\\n"
+        "The application listens on port 8000 by default.\\n",
+        encoding="utf-8",
+    )
+    git("add", "server.py", "README.md")
+    commit("Create application with port 8000")
+    (repository / "server.py").write_text(
+        "APPLICATION_DEFAULT_PORT = 9090\\n", encoding="utf-8"
+    )
+    git("add", "server.py")
+    commit("Change application port to 9090")
 
 st.set_page_config(page_title="DocuGuard | Documentation Integrity", page_icon="🛡️", layout="wide")
 
@@ -33,7 +78,7 @@ with st.sidebar:
     st.write("3. Optionally provide a separate documentation source.")
     st.write("4. Review evidence-backed findings and export a report.")
     st.divider()
-    st.caption("Analysis runs locally on the machine hosting this app.")
+    st.caption("Analysis runs on the server hosting this app. Local folders must exist on that server.")
     st.caption("This interface uses deterministic checks and does not send source code to an AI provider.")
 
 st.markdown("## Analyse a repository")
@@ -41,8 +86,11 @@ st.write("Choose a Git repository with commit history. DocuGuard compares the se
 
 left, right = st.columns(2)
 with left:
-    repo_kind = st.selectbox("Code repository source", ["GitHub repository URL", "Local Git repository"])
-    if repo_kind == "GitHub repository URL":
+    repo_kind = st.selectbox("Code repository source", ["Built-in DocuGuard demo", "GitHub repository URL", "Local Git repository"])
+    if repo_kind == "Built-in DocuGuard demo":
+        repo_url = repo_branch = repo_local = ""
+        st.caption("Runs a small preconfigured repository with a known documentation mismatch. No local path or external repository needed.")
+    elif repo_kind == "GitHub repository URL":
         repo_url = st.text_input("GitHub URL", placeholder="https://github.com/owner/repository")
         repo_branch = st.text_input("Branch (optional)", placeholder="Default branch")
         repo_local = ""
@@ -87,7 +135,10 @@ if submitted:
             with st.spinner("Preparing repository and analysing documentation drift…"):
                 with ExitStack() as stack:
                     upload_root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="docuguard-upload-")))
-                    if repo_kind == "GitHub repository URL":
+                    if repo_kind == "Built-in DocuGuard demo":
+                        repository = upload_root / "docuguard-demo-repository"
+                        create_builtin_demo(repository)
+                    elif repo_kind == "GitHub repository URL":
                         repository, _ = resolve_source(stack, github_url=repo_url.strip(), branch=repo_branch.strip() or None, label="repository")
                     else:
                         repository, _ = resolve_source(stack, local_path=repo_local.strip(), label="repository")
@@ -199,4 +250,4 @@ if result:
                     st.warning(suggestion["reason"])
     st.caption("DocuGuard reports evidence and proposed corrections. Review findings before changing documentation.")
 else:
-    st.info("Ready when you are. Start with a GitHub repository URL and leave the comparison reference at HEAD~1 to inspect its latest committed change.")
+    st.info("For a quick hosted demo, choose Built-in DocuGuard demo. For your own project, use its public GitHub repository URL. A path on your personal computer is not accessible to this hosted app.")
