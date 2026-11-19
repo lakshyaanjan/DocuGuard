@@ -7,6 +7,7 @@ from docuguard.llm_client import (
     create_embeddings,
     create_structured_response,
     get_api_base,
+    get_api_key,
 )
 
 
@@ -21,24 +22,25 @@ class LLMClientTests(unittest.TestCase):
                         {"index": 0, "embedding": [0.1, 0.2]},
                     ]
                 },
-            ):
-                vectors = create_embeddings(["first", "second"])
+            ) as request:
+                vectors = create_embeddings(["first", "second"], model="test-embedding")
         self.assertEqual(vectors, [[0.1, 0.2], [0.4, 0.5]])
+        self.assertEqual(request.call_args.args[0], "embeddings")
+        self.assertEqual(request.call_args.args[1]["model"], "test-embedding")
 
     def test_empty_embedding_input_does_not_call_api(self):
         with patch("docuguard.llm_client._post_json") as request:
             self.assertEqual(create_embeddings([]), [])
         request.assert_not_called()
 
-    def test_responses_api_json_output_is_parsed(self):
+    def test_chat_completions_json_output_is_parsed(self):
         response = {
-            "status": "completed",
-            "output": [{
-                "type": "message",
-                "content": [{
-                    "type": "output_text",
-                    "text": '{"analyses": []}',
-                }],
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": '{"analyses": []}',
+                },
+                "finish_reason": "stop",
             }],
         }
         with patch.dict(os.environ, {"OPENAI_API_KEY": "unit-test-key"}, clear=True):
@@ -59,9 +61,26 @@ class LLMClientTests(unittest.TestCase):
                     model="test-model",
                 )
         self.assertEqual(parsed, {"analyses": []})
-        self.assertEqual(request.call_args.args[0], "responses")
-        self.assertEqual(request.call_args.args[1]["model"], "test-model")
-        self.assertFalse(request.call_args.args[1]["store"])
+        self.assertEqual(request.call_args.args[0], "chat/completions")
+        payload = request.call_args.args[1]
+        self.assertEqual(payload["model"], "test-model")
+        self.assertEqual(payload["response_format"]["type"], "json_schema")
+        self.assertTrue(payload["response_format"]["json_schema"]["strict"])
+
+    def test_gemini_api_key_alias_is_recognised(self):
+        with patch.dict(os.environ, {"GEMINI_API_KEY": "gemini-test-key"}, clear=True):
+            self.assertEqual(get_api_key(), "gemini-test-key")
+
+    def test_openai_compatible_gemini_base_url_is_accepted(self):
+        with patch.dict(
+            os.environ,
+            {"DOCUGUARD_OPENAI_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai/"},
+            clear=True,
+        ):
+            self.assertEqual(
+                get_api_base(),
+                "https://generativelanguage.googleapis.com/v1beta/openai",
+            )
 
     def test_missing_key_fails_clearly(self):
         with patch.dict(os.environ, {}, clear=True):
