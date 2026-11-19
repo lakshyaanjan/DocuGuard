@@ -130,6 +130,15 @@ python -m docuguard.ingestion --repo ..\your-project --docs-website https://docs
 
 Versioned snapshots are stored below .docuguard/index/ and preserve chunks, content hashes, source commit metadata, file paths, symbols, sections, and line ranges. See docs/INGESTION_AND_DATA_MODEL.md for the schema and safety limits.
 
+### Query the organised corpus with RAG
+
+~~~powershell
+python -m docuguard.rag --index .docuguard/index --query "Where is the default application port configured?"
+~~~
+
+The RAG command reads the newest versioned snapshot, retrieves relevant raw evidence chunks with BM25 (optionally hybrid BM25/vector retrieval), uses file/section summaries for navigation, and can generate a grounded answer through the configured LLM. It validates generated citations against retrieved chunk IDs and prints the original file paths and line ranges. Use --llm-mode off for an offline retrieval-only demonstration, or --llm-mode required to insist on model-generated answers. See docs/RAG_QUICKSTART.md for the complete workflow.
+
+
 ## Historical replay
 
 The GitHub Actions workflow **DocuGuard Historical Replay Evaluation** replays candidate code-change/docs-only-fix pairs from two public projects: pallets/click and encode/httpx. Start it manually in the Actions tab and inspect both reports.
