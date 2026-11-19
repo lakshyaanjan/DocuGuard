@@ -59,6 +59,11 @@ jobs:
         continue-on-error: true
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DOCUGUARD_OPENAI_BASE_URL: ${{ vars.DOCUGUARD_OPENAI_BASE_URL || 'https://api.openai.com/v1' }}
+          DOCUGUARD_LLM_MODEL: ${{ vars.DOCUGUARD_LLM_MODEL || 'gpt-6.2-astra' }}
+          DOCUGUARD_EMBEDDING_MODEL: ${{ vars.DOCUGUARD_EMBEDDING_MODEL || 'text-embedding-3-small' }}
+          DOCUGUARD_USE_EMBEDDINGS: ${{ vars.DOCUGUARD_USE_EMBEDDINGS || 'true' }}
           DOCUGUARD_LLM_MODE: auto
         run: |
           python -m docuguard.history_replay \

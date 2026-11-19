@@ -9,34 +9,48 @@ DocuGuard has two complementary detection paths:
 
 1. Git diff extracts added and removed source lines with their original line numbers.
 2. DocuGuard extracts documentation sentences and Markdown table rows with file/line provenance.
-3. A BM25-style lexical ranker finds likely related passages. If an API key is configured, embeddings improve semantic retrieval.
+3. A BM25-style lexical ranker finds likely related passages. If an API key is configured, embeddings can improve semantic retrieval.
 4. Documentation embeddings are cached outside the repository. The cache key includes the model name and content hash, so unchanged passages can reuse their vectors.
-5. For each changed source file, a bounded shortlist of up to eight documentation passages and the exact code diff is sent to the configured Responses API model.
+5. For each changed source file, a bounded shortlist of up to eight documentation passages and the exact code diff is sent to the configured Chat Completions model.
 6. The model returns structured classifications: likely_drift, no_drift, needs_review, or unrelated.
 7. DocuGuard validates the returned candidate index and attaches the original file path and line number from its own extraction. The model is not trusted to invent citations.
 8. High-confidence drift may receive a suggested replacement sentence. Historical or ambiguous passages are routed to a human reviewer. DocuGuard never changes files automatically.
 
 The default limits are eight changed files and eight candidate passages per changed file, keeping model input bounded.
 
-## Configure the OpenAI API
+## Configure Google AI Studio (Gemini)
 
-The repository contains no API key. Create a key in your OpenAI account and store it in an environment variable.
+Google AI Studio provides an OpenAI-compatible API for Chat Completions and embeddings. DocuGuard calls those endpoints rather than the OpenAI Responses API. Create a key in https://aistudio.google.com/apikey.
 
 PowerShell (current terminal only):
 
 ~~~powershell
-$env:OPENAI_API_KEY = "YOUR_API_KEY"
-python app.py --repo ..\your-project --llm-mode auto --html-out report.html --json-out report.json
+$secureKey = Read-Host "Paste your Gemini API key" -AsSecureString
+$env:GEMINI_API_KEY = ([System.Net.NetworkCredential]::new("", $secureKey)).Password
+Remove-Variable secureKey
+
+$env:DOCUGUARD_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+$env:DOCUGUARD_LLM_MODEL = "gemini-3.6-flash"
+$env:DOCUGUARD_EMBEDDING_MODEL = "gemini-embedding-2-preview"
+$env:DOCUGUARD_USE_EMBEDDINGS = "false"
+
+python examples/run_demo.py --llm-mode required --no-embeddings
 ~~~
 
-For GitHub Actions, add a repository secret named OPENAI_API_KEY under **Settings -> Secrets and variables -> Actions**. The pull-request workflow reads that secret into the analysis process. Never paste a key into source code, a workflow literal, a screenshot, or a public issue.
+This runs the Gemini judge with lexical retrieval and makes no embeddings requests. Google lists Gemini 3.6 Flash as available on the free tier. Check the AI Studio Rate Limit and Usage pages for the active project's exact quotas. Google states that content submitted on the free tier may be used to improve its products; do not send private or sensitive source code unless that use is acceptable.
 
-If the secret is not configured, the workflow still runs the deterministic checks. The model layer reports that it is not configured rather than pretending semantic analysis ran.
+To enable Gemini embeddings, set DOCUGUARD_USE_EMBEDDINGS to true. The configured OpenAI-compatible embedding model is gemini-embedding-2-preview. Its availability and quota depend on the AI Studio project.
+
+## Configure another OpenAI-compatible provider
+
+The API key is read from the environment and is never written to the repository. For OpenAI, set OPENAI_API_KEY and use the default API base/model. For another compatible provider, set DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL to its endpoint and a model that supports Chat Completions structured outputs. Set DOCUGUARD_EMBEDDING_MODEL if that provider's embedding model differs.
+
+For GitHub Actions, add the key as a repository secret. For Gemini, create a secret named GEMINI_API_KEY and repository variables named DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL with the Gemini values shown above.
 
 ## Analysis modes
 
-- --llm-mode auto (default): use the semantic layer when a key is available; on API failure retain deterministic results and emit a warning.
-- --llm-mode off: deterministic checks only.
+- --llm-mode auto (default): use the semantic layer when an API key is configured; on API failure retain deterministic results and emit a warning.
+- --llm-mode off: deterministic checks only; no model API requests.
 - --llm-mode required: fail clearly when the key or model service is unavailable. Use this mode when an evaluation must prove the LLM path ran.
 - --no-embeddings: use lexical retrieval while keeping the LLM judge enabled.
 
@@ -45,15 +59,17 @@ If the secret is not configured, the workflow still runs the deterministic check
 | Environment variable | Default | Purpose |
 |---|---|---|
 | OPENAI_API_KEY | unset | OpenAI API credential |
+| GEMINI_API_KEY | unset | Google AI Studio Gemini API credential |
+| GOOGLE_API_KEY | unset | Alternative Google API credential name |
 | DOCUGUARD_OPENAI_API_KEY | unset | Alternative API key name |
-| DOCUGUARD_OPENAI_BASE_URL | https://api.openai.com/v1 | API base URL for compatible deployments |
-| DOCUGUARD_LLM_MODEL | gpt-6.2-astra | Responses API model |
+| DOCUGUARD_OPENAI_BASE_URL | https://api.openai.com/v1 | OpenAI-compatible API base URL |
+| DOCUGUARD_LLM_MODEL | gpt-6.2-astra | Chat Completions model |
 | DOCUGUARD_EMBEDDING_MODEL | text-embedding-3-small | Embeddings model |
 | DOCUGUARD_USE_EMBEDDINGS | true | Enable/disable embedding retrieval |
 | DOCUGUARD_CACHE_DIR | ~/.cache/docuguard | Local embedding cache |
 | DOCUGUARD_LLM_MODE | auto | Default analysis mode |
 
-The client uses Python's standard library and adds no package dependency. It calls the OpenAI Responses API for structured JSON review and the embeddings endpoint for vector representations. Use a model available to your API account; change DOCUGUARD_LLM_MODEL when needed.
+The client uses Python's standard library and adds no package dependency. It calls the Chat Completions endpoint with JSON Schema structured output and the embeddings endpoint for vectors. Use models available to your API account; provider quotas and model availability can change.
 
 ## Separate documentation sources
 
@@ -66,7 +82,7 @@ python app.py --repo ..\source --docs-zip .\docs.zip
 python app.py --repo ..\source --docs-website https://docs.example.com/
 ~~~
 
-The GitHub source resolver supports public repositories and private repositories when DOCUGUARD_GITHUB_TOKEN is configured with read-only access. Website crawling is restricted to bounded, public, same-origin static HTML. It rejects private-address resolution and cross-origin redirects. JavaScript-rendered and authenticated pages are not supported.
+The GitHub source resolver supports public repositories and private repositories when DOCUGUARD_GITHUB_TOKEN is configured with read-only access. Website crawling is restricted to bounded, public, same-origin static HTML. It rejects private-address resolutions and cross-origin redirects. JavaScript-rendered and authenticated sites are not supported.
 
 ## Run the end-to-end demonstration
 
@@ -88,7 +104,7 @@ python examples/run_demo.py --llm-mode off
 
 The existing historical replay workflow can be started from GitHub Actions for the two public projects configured in .github/workflows/historical-replay.yml (pallets/click and encode/httpx). Open the **Actions** tab, select **DocuGuard Historical Replay Evaluation**, choose **Run workflow**, and inspect both generated reports.
 
-The replay tool mines likely code-change/documentation-fix pairs. Its candidate match rate is a heuristic, not formal recall or precision: a documentation-only commit near a source change may be unrelated. Inspect the listed commit pairs and findings before presenting any score.
+The replay tool mines likely code-change/documentation-fix pairs. Its candidate match rate is a heuristic, not formal recall or precision: a docs-only commit near a source change may be unrelated. Inspect the listed commit pairs and findings before presenting any score.
 
 ## Limitations and responsible use
 
