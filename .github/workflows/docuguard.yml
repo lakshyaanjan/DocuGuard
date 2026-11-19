@@ -12,6 +12,9 @@ permissions:
 jobs:
   documentation-drift:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DOCUGUARD_LLM_MODE: auto
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
