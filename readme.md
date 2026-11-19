@@ -134,7 +134,7 @@ Versioned snapshots are stored below .docuguard/index/ and preserve chunks, cont
 
 The GitHub Actions workflow **DocuGuard Historical Replay Evaluation** replays candidate code-change/docs-only-fix pairs from two public projects: pallets/click and encode/httpx. Start it manually in the Actions tab and inspect both reports.
 
-The candidate match rate is a heuristic, not formal precision or recall. A docs-only commit close to a source change may be unrelated. Review candidate pairs before reporting a score.
+The replay miner compares added and removed documentation text with source-code changes, selecting a related prior code change rather than blindly pairing the nearest commit. Its default search window is 365 days, and its workflow uses required LLM mode so API failures cannot silently fall back to deterministic checks. The candidate match rate is still not formal precision or recall: inspect the shared terms and each pair before reporting a score.
 
 ## Design and safety
 
