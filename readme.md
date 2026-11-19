@@ -9,7 +9,8 @@ DocuGuard is a pull-request documentation drift checker. It examines code change
 - Detects removed or renamed literal argparse command-line flags.
 - Detects changed simple Python scalar defaults and selected configuration dictionary changes.
 - Uses lexical retrieval and (when configured) semantic embeddings to connect changed source files to documentation sentences and Markdown table rows.
-- Uses an optional OpenAI model to judge whether a retrieved passage is actually inaccurate, rather than treating every keyword match as drift.
+- Uses an LLM through an OpenAI-compatible Chat Completions API to judge whether a retrieved passage is actually inaccurate, rather than treating every keyword match as drift.
+- Supports OpenAI-compatible providers, including Google AI Studio's Gemini API.
 - Labels uncertain and historical passages for human review.
 - Produces HTML and JSON reports, GitHub Actions annotations, and a Markdown job summary.
 - Proposes corrections when evidence supports one. It never modifies, commits, or pushes documentation automatically.
@@ -46,39 +47,61 @@ python examples/run_demo.py --llm-mode off
 
 ## Enable semantic LLM review
 
-Create an OpenAI API key and set it in your terminal. Do not commit the key.
+DocuGuard uses the OpenAI-compatible Chat Completions and Embeddings endpoints. The API key and model are selected through environment variables. Do not commit API keys.
+
+### Google AI Studio (Gemini free tier)
+
+Create a Gemini API key in https://aistudio.google.com/apikey, then configure the current PowerShell session:
 
 ~~~powershell
-$env:OPENAI_API_KEY = "YOUR_API_KEY"
-python app.py --repo ..\your-project --llm-mode auto --html-out report.html --json-out report.json
+$secureKey = Read-Host "Paste your Gemini API key" -AsSecureString
+$env:GEMINI_API_KEY = ([System.Net.NetworkCredential]::new("", $secureKey)).Password
+Remove-Variable secureKey
+
+$env:DOCUGUARD_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+$env:DOCUGUARD_LLM_MODEL = "gemini-3.6-flash"
+$env:DOCUGUARD_EMBEDDING_MODEL = "gemini-embedding-2-preview"
+$env:DOCUGUARD_USE_EMBEDDINGS = "false"
+
+python examples/run_demo.py --llm-mode required --no-embeddings
 ~~~
 
-The default LLM model is gpt-6.2-astra and the default embedding model is text-embedding-3-small. Change them with DOCUGUARD_LLM_MODEL and DOCUGUARD_EMBEDDING_MODEL when needed.
+This runs the Gemini judge with lexical retrieval, so it does not call the embeddings endpoint. Google lists Gemini 3.6 Flash as available on the free tier; free-tier availability and rate limits depend on the Google AI Studio project. Free-tier content may be used to improve Google's products, so do not send private or sensitive source code unless that use is acceptable.
+
+To enable Gemini embeddings as well, set DOCUGUARD_USE_EMBEDDINGS to true and retain gemini-embedding-2-preview as the embedding model. Embedding availability and quotas are subject to the active AI Studio project limits.
+
+### Other OpenAI-compatible providers
+
+For an OpenAI API key, set OPENAI_API_KEY and use the default API base/model, or configure DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL for another provider that supports Chat Completions structured outputs and embeddings.
+
+For GitHub Actions, add the relevant provider key as a repository secret. For Gemini, add GEMINI_API_KEY, then add repository variables DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL with the Gemini values above. The PR workflow remains deterministic when no supported API key is present.
 
 Analysis modes:
 
 | Mode | Behavior |
 |---|---|
-| auto | Uses embeddings and LLM review when a key is available; retains deterministic results with a warning on model/API failure |
+| auto | Uses the configured LLM when a key is present; retains deterministic results with a warning on model/API failure |
 | off | Runs deterministic checks only; no API requests |
 | required | Requires the model API and fails clearly if it is unavailable |
 
 Use --no-embeddings to keep the LLM judge but retrieve candidates lexically.
 
-For GitHub Actions, add a repository secret named OPENAI_API_KEY under **Settings -> Secrets and variables -> Actions**. The PR workflow passes this secret to DocuGuard. Without the secret, the workflow safely runs deterministic checks only.
-
 Configuration:
 
 | Environment variable | Default | Purpose |
 |---|---|---|
-| OPENAI_API_KEY | unset | OpenAI API key |
+| OPENAI_API_KEY | unset | OpenAI API credential |
+| GEMINI_API_KEY | unset | Google AI Studio Gemini API credential |
+| GOOGLE_API_KEY | unset | Alternative Google API credential name |
 | DOCUGUARD_OPENAI_API_KEY | unset | Alternative API key name |
-| DOCUGUARD_OPENAI_BASE_URL | https://api.openai.com/v1 | API base URL |
-| DOCUGUARD_LLM_MODEL | gpt-6.2-astra | Responses API model |
+| DOCUGUARD_OPENAI_BASE_URL | https://api.openai.com/v1 | OpenAI-compatible API base URL |
+| DOCUGUARD_LLM_MODEL | gpt-6.2-astra | Chat Completions model |
 | DOCUGUARD_EMBEDDING_MODEL | text-embedding-3-small | Embeddings model |
 | DOCUGUARD_USE_EMBEDDINGS | true | Enable semantic-vector retrieval |
 | DOCUGUARD_CACHE_DIR | ~/.cache/docuguard | Local embedding cache |
 | DOCUGUARD_LLM_MODE | auto | Default analysis mode |
+
+The client uses Python's standard library and adds no package dependency. It calls the Chat Completions endpoint with JSON Schema structured output and the embeddings endpoint for vector representations. Use a model available to your API account; change DOCUGUARD_LLM_MODEL and DOCUGUARD_EMBEDDING_MODEL when needed.
 
 The semantic stage uses bounded retrieval: by default, up to eight changed source files and eight candidate documentation passages per file are sent to the model. Documentation embeddings are cached locally outside the repository by model and content hash. Exact citation paths and line numbers come from DocuGuard's extractors, not model output.
 
@@ -126,7 +149,7 @@ See docs/LLM_AND_SEMANTIC_DETECTION.md for the semantic pipeline, configuration,
 
 ## Current limitations
 
-- Semantic analysis depends on an API key, network access, model availability and the quality of retrieved passages.
+- Semantic analysis depends on an API key, network access, model availability and the provider's quotas.
 - Retrieval uses an in-memory BM25-style ranker plus a local embedding cache, not a hosted vector database.
 - Deterministic analysis is strongest for Python scalar/configuration changes and argparse flags; generic multi-language changes are model-assisted and need validation.
 - Historical replay mines candidate pairs but does not establish ground truth by itself.
