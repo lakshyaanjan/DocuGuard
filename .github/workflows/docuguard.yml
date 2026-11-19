@@ -12,6 +12,8 @@ permissions:
 jobs:
   documentation-drift:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,11 +26,14 @@ jobs:
           python-version: "3.12"
 
       - name: Run DocuGuard tests
+        env:
+          DOCUGUARD_LLM_MODE: off
         run: python -m unittest discover -s tests -v
 
       - name: Run DocuGuard and generate reports
         env:
           DOCUGUARD_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+          DOCUGUARD_LLM_MODE: auto
         run: python app.py --html-out docuguard-report.html --json-out docuguard-report.json
 
       - name: Upload DocuGuard reports

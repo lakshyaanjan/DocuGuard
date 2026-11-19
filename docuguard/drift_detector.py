@@ -1,4 +1,6 @@
+import os
 import re
+import warnings
 from pathlib import Path
 
 from .relationship_engine import find_documentation_relationships
@@ -23,7 +25,7 @@ def find_historical_indicators(sentence):
 
 
 def evaluate_finding(finding):
-    """Evaluate a documentation match without mutating the input finding."""
+    """Evaluate a deterministic finding without mutating the input."""
     result = dict(finding)
     sentence = finding["documentation"]["sentence"]
     old_value = str(finding.get("old_value", "")).lower()
@@ -102,10 +104,73 @@ def evaluate_finding(finding):
     return result
 
 
-def detect_documentation_drift(repo_path, docs_path=None):
-    """Find and evaluate potential documentation drift."""
-    findings = find_documentation_relationships(repo_path, docs_path)
-    return [evaluate_finding(finding) for finding in findings]
+def detect_documentation_drift(
+    repo_path,
+    docs_path=None,
+    *,
+    llm_mode=None,
+    use_embeddings=None,
+):
+    """Run deterministic rules, then optional retrieval-grounded LLM analysis.
+
+    LLM mode:
+      auto     - use the model when an API key is configured; otherwise offline rules
+      off      - deterministic rules only
+      required - fail clearly unless an API key and model service are available
+    """
+    findings = [
+        evaluate_finding(finding)
+        for finding in find_documentation_relationships(repo_path, docs_path)
+    ]
+    mode = (llm_mode or os.environ.get("DOCUGUARD_LLM_MODE", "auto")).lower()
+    if mode not in {"auto", "off", "required"}:
+        raise ValueError("llm_mode must be one of: auto, off, required.")
+    if mode == "off":
+        return findings
+
+    from .llm_client import LLMError, get_api_key
+    if not get_api_key():
+        if mode == "required":
+            raise LLMError(
+                "LLM mode is required, but no API key is configured. "
+                "Set OPENAI_API_KEY or DOCUGUARD_OPENAI_API_KEY."
+            )
+        return findings
+
+    try:
+        from .semantic_mapper import detect_semantic_drift
+        semantic_findings = detect_semantic_drift(
+            repo_path,
+            docs_path,
+            use_embeddings=use_embeddings,
+        )
+    except LLMError as error:
+        if mode == "required":
+            raise
+        warnings.warn(
+            f"DocuGuard's LLM layer was unavailable; deterministic findings are retained: {error}",
+            RuntimeWarning,
+        )
+        return findings
+
+    existing = {
+        (
+            item["documentation"]["file"],
+            item["documentation"]["line"],
+            item["code_change"]["file"],
+        )
+        for item in findings
+    }
+    for finding in semantic_findings:
+        key = (
+            finding["documentation"]["file"],
+            finding["documentation"]["line"],
+            finding["code_change"]["file"],
+        )
+        if key not in existing:
+            findings.append(finding)
+            existing.add(key)
+    return findings
 
 
 if __name__ == "__main__":

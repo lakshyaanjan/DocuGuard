@@ -9,3 +9,4 @@ docuguard-*.json
 history-replay-report.json
 history-replay-report.md
 .docuguard/
+demo-output/

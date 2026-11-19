@@ -36,6 +36,27 @@ def generate_suggestion(finding):
     sentence = finding["documentation"]["sentence"]
     drift_type = finding.get("drift_type")
 
+    if finding.get("analysis_source") == "llm_semantic":
+        suggested_sentence = finding.get("suggested_sentence")
+        evidence = _evidence(finding, str(new_value) if new_value is not None else None)
+        if not suggested_sentence:
+            return {
+                "status": "manual_review_required",
+                "reason": (
+                    "The model found likely drift, but could not produce a precise "
+                    "replacement supported by the supplied code evidence."
+                ),
+                "evidence": evidence,
+            }
+        return {
+            "status": "suggestion_generated",
+            "original_sentence": sentence,
+            "suggested_sentence": suggested_sentence,
+            "evidence": evidence,
+            "explanation": finding.get("reason", "The model identified a stale documentation passage."),
+            "review_required": True,
+        }
+
     if drift_type in {"configuration_option_added", "configuration_option_removed"}:
         action = (
             "Add this option to the related configuration documentation."

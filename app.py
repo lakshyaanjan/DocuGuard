@@ -1,8 +1,12 @@
 import argparse
+import os
 import sys
+from contextlib import ExitStack
 from pathlib import Path
 
 from docuguard.drift_detector import detect_documentation_drift
+from docuguard.ingestion.sources import SourceError, resolve_source
+from docuguard.llm_client import LLMError, get_api_key, get_model
 from docuguard.reporting import (
     render_html_report,
     render_markdown_summary,
@@ -19,10 +23,32 @@ def build_parser():
     )
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parent,
                         help="Repository to analyse (defaults to this project).")
+    docs = parser.add_mutually_exclusive_group()
+    docs.add_argument(
+        "--docs-path", type=Path,
+        help="Optional separate local checkout containing documentation files."
+    )
+    docs.add_argument(
+        "--docs-url",
+        help="Optional HTTPS GitHub URL of a separate documentation repository."
+    )
+    docs.add_argument(
+        "--docs-zip", type=Path,
+        help="Optional ZIP archive containing the documentation source."
+    )
+    docs.add_argument(
+        "--docs-website",
+        help="Optional public static documentation website (bounded same-origin crawl)."
+    )
+    parser.add_argument("--docs-branch", help="Branch to clone from --docs-url.")
     parser.add_argument(
-        "--docs-path",
-        type=Path,
-        help="Optional separate checkout containing documentation files."
+        "--llm-mode", choices=("auto", "off", "required"),
+        default=os.environ.get("DOCUGUARD_LLM_MODE", "auto"),
+        help="auto uses the model when an API key exists; off is deterministic; required fails without the model.",
+    )
+    parser.add_argument(
+        "--no-embeddings", action="store_true",
+        help="Use lexical retrieval instead of the embeddings API (LLM judging still runs).",
     )
     parser.add_argument("--html-out", type=Path,
                         help="Write a self-contained HTML report to this path.")
@@ -55,6 +81,9 @@ def _manual_review_for_finding(finding):
 def main(argv=None):
     args = build_parser().parse_args(argv)
     repository = args.repo.resolve()
+    if not repository.is_dir():
+        print(f"Repository directory does not exist: {repository}", file=sys.stderr)
+        return 2
 
     print("=" * 55)
     print("                  DOCUGUARD")
@@ -62,17 +91,53 @@ def main(argv=None):
     print("=" * 55)
     print("\nAnalyzing repository...\n")
 
-    docs_path = args.docs_path.resolve() if args.docs_path else None
-    findings = detect_documentation_drift(repository, docs_path)
-    suggestions = []
+    if args.llm_mode == "off":
+        print("LLM: disabled (deterministic checks only)")
+    elif get_api_key():
+        print(f"LLM: enabled ({get_model()})")
+        if not args.no_embeddings:
+            print("Retrieval: embeddings + lexical ranking (cached locally)")
+        else:
+            print("Retrieval: lexical ranking")
+    else:
+        print("LLM: not configured; using deterministic checks")
+        print("      Set OPENAI_API_KEY to enable semantic mapping.")
 
-    for finding in findings:
-        if finding.get("status") == "likely_drift":
-            suggestion = generate_suggestion(finding)
-            if suggestion is not None:
-                suggestions.append(suggestion)
-        elif finding.get("status") == "needs_review":
-            suggestions.append(_manual_review_for_finding(finding))
+    suggestions = []
+    try:
+        with ExitStack() as stack:
+            docs_path = None
+            if args.docs_path is not None:
+                docs_path = args.docs_path.expanduser().resolve()
+                if not docs_path.is_dir():
+                    raise SourceError(f"Documentation directory does not exist: {docs_path}")
+            elif args.docs_url or args.docs_zip or args.docs_website:
+                docs_path, _ = resolve_source(
+                    stack,
+                    github_url=args.docs_url,
+                    zip_path=args.docs_zip,
+                    website_url=args.docs_website,
+                    branch=args.docs_branch,
+                    label="docs",
+                )
+
+            findings = detect_documentation_drift(
+                repository,
+                docs_path,
+                llm_mode=args.llm_mode,
+                use_embeddings=False if args.no_embeddings else None,
+            )
+            for finding in findings:
+                if finding.get("status") == "likely_drift":
+                    suggestion = generate_suggestion(finding)
+                    if suggestion is not None:
+                        suggestions.append(suggestion)
+                elif finding.get("status") == "needs_review":
+                    suggestions.append(_manual_review_for_finding(finding))
+
+    except (SourceError, LLMError, OSError, ValueError) as error:
+        print(f"DocuGuard could not complete the analysis: {error}", file=sys.stderr)
+        return 2
 
     likely_count = sum(f.get("status") == "likely_drift" for f in findings)
     review_count = sum(f.get("status") == "needs_review" for f in findings)
@@ -129,8 +194,6 @@ def main(argv=None):
         print(f"JSON report written to: {args.json_out}")
 
     print("\nDocuGuard analysis completed.")
-    # Likely drift blocks the PR. Historical/ambiguous passages remain visible
-    # for review without failing the PR.
     return 1 if likely_count else 0
 
 

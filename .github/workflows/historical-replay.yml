@@ -10,11 +10,7 @@ on:
       max_pairs:
         description: Maximum candidate pairs to replay per project
         required: false
-        default: "10"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/historical-replay.yml"
+        default: "3"
 
 permissions:
   contents: read
@@ -55,15 +51,20 @@ jobs:
           persist-credentials: false
 
       - name: Run DocuGuard unit tests
+        env:
+          DOCUGUARD_LLM_MODE: off
         run: python -m unittest discover -s tests -v
 
       - name: Replay historical candidates in Click
         continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DOCUGUARD_LLM_MODE: auto
         run: |
           python -m docuguard.history_replay \
             --repo targets/click \
             --window-days "${{ inputs.window_days || '30' }}" \
-            --max-pairs "${{ inputs.max_pairs || '10' }}" \
+            --max-pairs "${{ inputs.max_pairs || '3' }}" \
             --max-history-commits 4000 \
             --timeout 180 \
             --output reports/click-history.json \
@@ -71,11 +72,14 @@ jobs:
 
       - name: Replay historical candidates in HTTPX
         continue-on-error: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DOCUGUARD_LLM_MODE: auto
         run: |
           python -m docuguard.history_replay \
             --repo targets/httpx \
             --window-days "${{ inputs.window_days || '30' }}" \
-            --max-pairs "${{ inputs.max_pairs || '10' }}" \
+            --max-pairs "${{ inputs.max_pairs || '3' }}" \
             --max-history-commits 4000 \
             --timeout 180 \
             --output reports/httpx-history.json \
