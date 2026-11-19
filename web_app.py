@@ -44,17 +44,17 @@ def create_builtin_demo(repository: Path) -> None:
     git("init")
     git("branch", "-M", "main")
     (repository / "server.py").write_text(
-        "APPLICATION_DEFAULT_PORT = 8000\\n", encoding="utf-8"
+        "APPLICATION_DEFAULT_PORT = 8000\n", encoding="utf-8"
     )
     (repository / "README.md").write_text(
-        "# Demo application\\n\\n"
-        "The application listens on port 8000 by default.\\n",
+        "# Demo application\n\n"
+        "The application listens on port 8000 by default.\n",
         encoding="utf-8",
     )
     git("add", "server.py", "README.md")
     commit("Create application with port 8000")
     (repository / "server.py").write_text(
-        "APPLICATION_DEFAULT_PORT = 9090\\n", encoding="utf-8"
+        "APPLICATION_DEFAULT_PORT = 9090\n", encoding="utf-8"
     )
     git("add", "server.py")
     commit("Change application port to 9090")
