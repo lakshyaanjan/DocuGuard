@@ -1,8 +1,10 @@
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
+from docuguard.llm_client import LLMError
 from docuguard.drift_detector import (
     detect_documentation_drift,
     evaluate_finding,
@@ -71,6 +73,19 @@ class DriftDetectorTests(unittest.TestCase):
         )
 
         return temporary_directory, repo
+
+    def test_required_mode_error_names_supported_provider_keys(self):
+        temporary_directory, repo = self.create_test_repository(
+            "# Application\nThe application runs on port 8000 by default.\n"
+        )
+        try:
+            with patch("docuguard.llm_client.get_api_key", return_value=None):
+                with self.assertRaises(LLMError) as context:
+                    detect_documentation_drift(repo, llm_mode="required")
+            self.assertIn("GEMINI_API_KEY", str(context.exception))
+            self.assertIn("OPENAI_API_KEY", str(context.exception))
+        finally:
+            temporary_directory.cleanup()
 
     def test_outdated_documentation_is_flagged(self):
         temporary_directory, repo = self.create_test_repository(
