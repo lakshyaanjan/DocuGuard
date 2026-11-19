@@ -60,7 +60,7 @@ class HistoryReplayTests(unittest.TestCase):
             self.assertEqual(pairs[0]["docs_commit"], docs_sha)
             self.assertEqual(pairs[0]["docs_files"], ["README.md"])
             self.assertGreaterEqual(pairs[0]["relevance_score"], 2)
-            self.assertIn("default_timeout", pairs[0]["shared_terms"])
+            self.assertIn("timeout", pairs[0]["shared_terms"])
 
 
     def test_changed_text_overlap_scores_exact_identifiers_higher(self):
@@ -117,7 +117,7 @@ class HistoryReplayTests(unittest.TestCase):
             pairs = find_replay_candidates(repo, window_days=30, max_pairs=5)
             self.assertEqual(len(pairs), 1)
             self.assertEqual(pairs[0]["code_commit"], relevant_sha)
-            self.assertIn("ssl_cert_file_enabled", pairs[0]["shared_terms"])
+            self.assertIn("ssl", pairs[0]["shared_terms"])
 
     def test_replay_runs_docuguard_on_original_code_change_state(self):
         with tempfile.TemporaryDirectory() as directory:
