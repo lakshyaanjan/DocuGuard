@@ -270,7 +270,7 @@ def _build_code_changes(repo_path: Path) -> list[dict[str, Any]]:
 def _rank_with_embeddings(
     query: str,
     documents: list[dict[str, Any]],
-    document_vectors: list[list[float]],
+    document_vectors: list[list[float] | None],
     query_vector: list[float],
     *,
     limit: int,
@@ -279,6 +279,8 @@ def _rank_with_embeddings(
     maximum = max(lexical, default=0.0)
     ranked = []
     for index, vector in enumerate(document_vectors):
+        if vector is None:
+            continue
         semantic = max(0.0, _cosine_similarity(query_vector, vector))
         lexical_component = lexical[index] / maximum if maximum > 0 else 0.0
         score = 0.78 * semantic + 0.22 * lexical_component
@@ -414,7 +416,7 @@ def detect_semantic_drift(
     if use_embeddings is None:
         use_embeddings = os.environ.get("DOCUGUARD_USE_EMBEDDINGS", "true").lower() not in {"0", "false", "no", "off"}
 
-    document_vectors: list[list[float]] | None = None
+    document_vectors: list[list[float] | None] | None = None
     if use_embeddings:
         try:
             # Cap embedding work for exceptionally large sites; lexical retrieval
@@ -433,7 +435,7 @@ def detect_semantic_drift(
                 for index in vector_indices
             ]
             vectors = _get_cached_embeddings(vector_texts, embedding_model)
-            document_vectors = [None] * len(documents)  # type: ignore[list-item]
+            document_vectors = [None] * len(documents)
             for index, vector in zip(vector_indices, vectors):
                 document_vectors[index] = vector
         except LLMError as error:
