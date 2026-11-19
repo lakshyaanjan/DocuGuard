@@ -33,7 +33,7 @@ STOP_WORDS = {
     "as", "is", "in", "on", "of", "to", "a", "an", "or", "by", "it",
     "add", "added", "change", "changed", "update", "updated", "fix", "fixed",
     "version", "test", "tests", "docs", "documentation", "readme", "changelog",
-    "default", "support", "supports", "using", "example", "examples",
+    "support", "supports", "using", "example", "examples",
 }
 
 
