@@ -6,11 +6,11 @@ on:
       window_days:
         description: Maximum days between a source change and a docs-only follow-up
         required: false
-        default: "30"
+        default: "365"
       max_pairs:
         description: Maximum candidate pairs to replay per project
         required: false
-        default: "3"
+        default: "2"
 
 permissions:
   contents: read
@@ -64,13 +64,14 @@ jobs:
           DOCUGUARD_LLM_MODEL: ${{ vars.DOCUGUARD_LLM_MODEL || 'gpt-6.2-astra' }}
           DOCUGUARD_EMBEDDING_MODEL: ${{ vars.DOCUGUARD_EMBEDDING_MODEL || 'text-embedding-3-small' }}
           DOCUGUARD_USE_EMBEDDINGS: ${{ vars.DOCUGUARD_USE_EMBEDDINGS || 'true' }}
-          DOCUGUARD_LLM_MODE: auto
+          DOCUGUARD_LLM_MODE: required
         run: |
           python -m docuguard.history_replay \
             --repo targets/click \
-            --window-days "${{ inputs.window_days || '30' }}" \
-            --max-pairs "${{ inputs.max_pairs || '3' }}" \
+            --window-days "${{ inputs.window_days || '365' }}" \
+            --max-pairs "${{ inputs.max_pairs || '2' }}" \
             --max-history-commits 4000 \
+            --llm-mode required \
             --timeout 180 \
             --output reports/click-history.json \
             --markdown-out reports/click-history.md
@@ -84,13 +85,14 @@ jobs:
           DOCUGUARD_LLM_MODEL: ${{ vars.DOCUGUARD_LLM_MODEL || 'gpt-6.2-astra' }}
           DOCUGUARD_EMBEDDING_MODEL: ${{ vars.DOCUGUARD_EMBEDDING_MODEL || 'text-embedding-3-small' }}
           DOCUGUARD_USE_EMBEDDINGS: ${{ vars.DOCUGUARD_USE_EMBEDDINGS || 'true' }}
-          DOCUGUARD_LLM_MODE: auto
+          DOCUGUARD_LLM_MODE: required
         run: |
           python -m docuguard.history_replay \
             --repo targets/httpx \
-            --window-days "${{ inputs.window_days || '30' }}" \
-            --max-pairs "${{ inputs.max_pairs || '3' }}" \
+            --window-days "${{ inputs.window_days || '365' }}" \
+            --max-pairs "${{ inputs.max_pairs || '2' }}" \
             --max-history-commits 4000 \
+            --llm-mode required \
             --timeout 180 \
             --output reports/httpx-history.json \
             --markdown-out reports/httpx-history.md
