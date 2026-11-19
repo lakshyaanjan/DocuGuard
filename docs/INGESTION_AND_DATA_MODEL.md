@@ -77,14 +77,16 @@ Example internal service request after the backend stages the uploaded files:
 
 Do not expose `code_root` or `docs_root` as arbitrary filesystem path inputs to a public browser client. They are trusted backend-only fields. A later FastAPI adapter should accept multipart uploads / validated repository URLs, stage them safely, then invoke the service function.
 
-## Future RAG integration
+## Snapshot-backed RAG integration
 
-The next layer can consume `chunks.jsonl` and `summaries.jsonl` without changing the schema:
+The snapshot schema now feeds a local RAG query layer:
 
-1. Embed raw chunks and summary chunks separately.
-2. Store vectors with `chunk_id`, `project_id`, `source_id`, `path`, `kind`, `commit_sha`, `start_line` and `end_line` as filterable metadata.
-3. Query the changed code/diff; retrieve relevant raw passages and their summaries.
-4. Send retrieved evidence plus the changed-code evidence to the LLM judge.
-5. Validate returned citations against the original chunk IDs and source locations.
+~~~powershell
+python -m docuguard.rag --index .docuguard/index --query "Where is this configuration option used?"
+~~~
 
-`summary_method` and `is_llm_generated` fields make the distinction between future model-written summaries and today's extractive summaries explicit.
+The RAG layer loads the manifest, raw chunks and extractive summaries from the selected snapshot. BM25 retrieval ranks raw evidence chunks; summary-to-chunk links help navigate to relevant passages. When configured, hybrid retrieval combines BM25 and cached provider embeddings. The LLM receives the question, retrieved raw evidence and navigation summaries, then returns an answer with chunk IDs. DocuGuard validates every returned citation against the retrieved chunk IDs and renders the original source path and line range.
+
+Use --llm-mode off for retrieval-only output without API calls. Use --llm-mode required when the user needs to prove that generation ran; auto mode attempts generation when a key is configured and labels retrieval-only fallback when the service is unavailable.
+
+The RAG CLI and complete example are documented in docs/RAG_QUICKSTART.md. Snapshot summaries remain extractive and preserve links to the original chunks; they are not presented as LLM-generated summaries.
