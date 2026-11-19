@@ -30,14 +30,14 @@ $env:GEMINI_API_KEY = ([System.Net.NetworkCredential]::new("", $secureKey)).Pass
 Remove-Variable secureKey
 
 $env:DOCUGUARD_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
-$env:DOCUGUARD_LLM_MODEL = "gemini-3.6-flash"
+$env:DOCUGUARD_LLM_MODEL = "gemini-3.5-flash-lite"
 $env:DOCUGUARD_EMBEDDING_MODEL = "gemini-embedding-2-preview"
 $env:DOCUGUARD_USE_EMBEDDINGS = "false"
 
 python examples/run_demo.py --llm-mode required --no-embeddings
 ~~~
 
-This runs the Gemini judge with lexical retrieval and makes no embeddings requests. Google lists Gemini 3.6 Flash as available on the free tier. Check the AI Studio Rate Limit and Usage pages for the active project's exact quotas. Google states that content submitted on the free tier may be used to improve its products; do not send private or sensitive source code unless that use is acceptable.
+This runs the Gemini judge with lexical retrieval and makes no embeddings requests. The `gemini-3.5-flash-lite` model was smoke-tested with this repository's Chat Completions client. Check the AI Studio Rate Limit and Usage pages for the active project's exact quotas, and review Google's data-use terms before sending private or sensitive source code.
 
 To enable Gemini embeddings, set DOCUGUARD_USE_EMBEDDINGS to true. The configured OpenAI-compatible embedding model is gemini-embedding-2-preview. Its availability and quota depend on the AI Studio project.
 
