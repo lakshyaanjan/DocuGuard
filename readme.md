@@ -59,14 +59,14 @@ $env:GEMINI_API_KEY = ([System.Net.NetworkCredential]::new("", $secureKey)).Pass
 Remove-Variable secureKey
 
 $env:DOCUGUARD_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
-$env:DOCUGUARD_LLM_MODEL = "gemini-3.6-flash"
+$env:DOCUGUARD_LLM_MODEL = "gemini-3.5-flash-lite"
 $env:DOCUGUARD_EMBEDDING_MODEL = "gemini-embedding-2-preview"
 $env:DOCUGUARD_USE_EMBEDDINGS = "false"
 
 python examples/run_demo.py --llm-mode required --no-embeddings
 ~~~
 
-This runs the Gemini judge with lexical retrieval, so it does not call the embeddings endpoint. Google lists Gemini 3.6 Flash as available on the free tier; free-tier availability and rate limits depend on the Google AI Studio project. Free-tier content may be used to improve Google's products, so do not send private or sensitive source code unless that use is acceptable.
+This runs the Gemini judge with lexical retrieval, so it does not call the embeddings endpoint. The `gemini-3.5-flash-lite` model was smoke-tested with this repository's Chat Completions client. Availability and rate limits depend on the Google AI Studio project. Review Google's data-use terms before sending private or sensitive source code.
 
 To enable Gemini embeddings as well, set DOCUGUARD_USE_EMBEDDINGS to true and retain gemini-embedding-2-preview as the embedding model. Embedding availability and quotas are subject to the active AI Studio project limits.
 
@@ -74,7 +74,7 @@ To enable Gemini embeddings as well, set DOCUGUARD_USE_EMBEDDINGS to true and re
 
 For an OpenAI API key, set OPENAI_API_KEY and use the default API base/model, or configure DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL for another provider that supports Chat Completions structured outputs and embeddings.
 
-For GitHub Actions, add the relevant provider key as a repository secret. For Gemini, add GEMINI_API_KEY, then add repository variables DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL with the Gemini values above. The PR workflow remains deterministic when no supported API key is present.
+For GitHub Actions, add the relevant provider key as a repository secret. For Gemini, add `GEMINI_API_KEY`, then add repository variables `DOCUGUARD_OPENAI_BASE_URL` and `DOCUGUARD_LLM_MODEL` with the Gemini values above. The historical replay workflow uses `required` mode so provider failures are reported rather than silently falling back.
 
 Analysis modes:
 
