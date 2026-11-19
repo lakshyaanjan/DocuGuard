@@ -25,6 +25,18 @@ class LLMError(RuntimeError):
 
 
 def get_api_key() -> str | None:
+    configured_base = (
+        os.environ.get("DOCUGUARD_OPENAI_BASE_URL")
+        or os.environ.get("OPENAI_BASE_URL")
+        or ""
+    ).lower()
+    if "generativelanguage.googleapis.com" in configured_base:
+        return (
+            os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("GOOGLE_API_KEY")
+            or os.environ.get("DOCUGUARD_OPENAI_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+        )
     return (
         os.environ.get("DOCUGUARD_OPENAI_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
