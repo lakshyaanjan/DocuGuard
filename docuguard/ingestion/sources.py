@@ -38,8 +38,8 @@ def validate_github_url(url: str) -> str:
 def clone_github_repository(url: str, destination: Path, branch: str | None = None) -> tuple[str, str | None]:
     """Clone a public GitHub repository, or a private one using an env token.
 
-    The token is passed to Git through environment-based config, never embedded
-    in the URL, written to disk, or added to the subprocess argument list.
+    Two commits are fetched so the UI can compare HEAD with HEAD~1. The token
+    is passed to Git through environment-based config and never stored.
     """
     clone_url = validate_github_url(url)
     env = os.environ.copy()
@@ -52,7 +52,7 @@ def clone_github_repository(url: str, destination: Path, branch: str | None = No
         env[f"GIT_CONFIG_KEY_{config_count}"] = "http.https://github.com/.extraheader"
         env[f"GIT_CONFIG_VALUE_{config_count}"] = f"AUTHORIZATION: basic {encoded}"
 
-    command = ["git", "clone", "--depth", "1"]
+    command = ["git", "clone", "--depth", "2"]
     if branch:
         command.extend(["--branch", branch])
     command.extend([clone_url, str(destination)])
@@ -64,7 +64,6 @@ def clone_github_repository(url: str, destination: Path, branch: str | None = No
     except subprocess.TimeoutExpired as error:
         raise SourceError("GitHub clone timed out after 240 seconds.") from error
     if result.returncode != 0:
-        # Do not propagate a remote error that could echo credential-related data.
         message = result.stderr.strip().splitlines()
         detail = message[-1] if message else "Git clone failed."
         raise SourceError(f"Could not clone GitHub repository: {detail[:400]}")
@@ -108,7 +107,6 @@ def resolve_source(
     if website_url is not None:
         if label != "docs":
             raise SourceError("Website crawling is supported only for documentation sources.")
-        # Import lazily to keep source resolution independent from the crawler.
         from .website import crawl_documentation_website
         website_root = temporary / "website"
         crawl_documentation_website(website_url, website_root)
