@@ -39,33 +39,32 @@ with st.sidebar:
 st.markdown("## Analyse a repository")
 st.write("Choose a Git repository with commit history. DocuGuard compares the selected commit with its parent or checks uncommitted working-tree changes.")
 
-with st.form("docuguard_analysis"):
-    left, right = st.columns(2)
-    with left:
-        repo_kind = st.selectbox("Code repository source", ["GitHub repository URL", "Local Git repository"])
-        if repo_kind == "GitHub repository URL":
-            repo_url = st.text_input("GitHub URL", placeholder="https://github.com/owner/repository")
-            repo_branch = st.text_input("Branch (optional)", placeholder="Default branch")
-            repo_local = ""
-        else:
-            repo_local = st.text_input("Local repository folder", placeholder="C:\\Projects\\my-repository")
-            repo_url = ""
-            repo_branch = ""
-    with right:
-        compare_ref = st.text_input("Compare against Git reference", value="HEAD~1", help="HEAD~1 checks the latest committed change. Use HEAD to check uncommitted changes against the current commit.")
-        docs_kind = st.selectbox("Documentation source", ["Inside the code repository", "Separate GitHub repository", "Separate local folder", "ZIP archive", "Public documentation website"])
-        docs_url = docs_branch = docs_local = docs_website = ""
-        docs_zip = None
-        if docs_kind == "Separate GitHub repository":
-            docs_url = st.text_input("Documentation GitHub URL", placeholder="https://github.com/owner/documentation")
-            docs_branch = st.text_input("Documentation branch (optional)", placeholder="Default branch")
-        elif docs_kind == "Separate local folder":
-            docs_local = st.text_input("Documentation folder", placeholder="C:\\Projects\\my-documentation")
-        elif docs_kind == "ZIP archive":
-            docs_zip = st.file_uploader("Upload documentation ZIP", type=["zip"])
-        elif docs_kind == "Public documentation website":
-            docs_website = st.text_input("Documentation website URL", placeholder="https://docs.example.com/")
-    submitted = st.form_submit_button("🔍 Analyse repository", type="primary", use_container_width=True)
+left, right = st.columns(2)
+with left:
+    repo_kind = st.selectbox("Code repository source", ["GitHub repository URL", "Local Git repository"])
+    if repo_kind == "GitHub repository URL":
+        repo_url = st.text_input("GitHub URL", placeholder="https://github.com/owner/repository")
+        repo_branch = st.text_input("Branch (optional)", placeholder="Default branch")
+        repo_local = ""
+    else:
+        repo_local = st.text_input("Local repository folder", placeholder="C:\\Projects\\my-repository")
+        repo_url = ""
+        repo_branch = ""
+with right:
+    compare_ref = st.text_input("Compare against Git reference", value="HEAD~1", help="HEAD~1 checks the latest committed change. Use HEAD to check uncommitted changes against the current commit.")
+    docs_kind = st.selectbox("Documentation source", ["Inside the code repository", "Separate GitHub repository", "Separate local folder", "ZIP archive", "Public documentation website"])
+    docs_url = docs_branch = docs_local = docs_website = ""
+    docs_zip = None
+    if docs_kind == "Separate GitHub repository":
+        docs_url = st.text_input("Documentation GitHub URL", placeholder="https://github.com/owner/documentation")
+        docs_branch = st.text_input("Documentation branch (optional)", placeholder="Default branch")
+    elif docs_kind == "Separate local folder":
+        docs_local = st.text_input("Documentation folder", placeholder="C:\\Projects\\my-documentation")
+    elif docs_kind == "ZIP archive":
+        docs_zip = st.file_uploader("Upload documentation ZIP", type=["zip"])
+    elif docs_kind == "Public documentation website":
+        docs_website = st.text_input("Documentation website URL", placeholder="https://docs.example.com/")
+submitted = st.button("🔍 Analyse repository", type="primary", use_container_width=True)
 
 if submitted:
     st.session_state.pop("docuguard_result", None)
