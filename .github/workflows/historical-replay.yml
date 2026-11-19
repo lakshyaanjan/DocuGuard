@@ -64,7 +64,7 @@ jobs:
           python -m docuguard.history_replay \
             --repo targets/click \
             --window-days "${{ inputs.window_days || '30' }}" \
-            --max-pairs "${{ inputs.max_pairs || '10' }}" \
+            --max-pairs "${{ inputs.max_pairs || '3' }}" \
             --max-history-commits 4000 \
             --timeout 180 \
             --output reports/click-history.json \
@@ -79,7 +79,7 @@ jobs:
           python -m docuguard.history_replay \
             --repo targets/httpx \
             --window-days "${{ inputs.window_days || '30' }}" \
-            --max-pairs "${{ inputs.max_pairs || '10' }}" \
+            --max-pairs "${{ inputs.max_pairs || '3' }}" \
             --max-history-commits 4000 \
             --timeout 180 \
             --output reports/httpx-history.json \
