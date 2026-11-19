@@ -133,7 +133,7 @@ def detect_documentation_drift(
         if mode == "required":
             raise LLMError(
                 "LLM mode is required, but no API key is configured. "
-                "Set OPENAI_API_KEY or DOCUGUARD_OPENAI_API_KEY."
+                "Set GEMINI_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, or DOCUGUARD_OPENAI_API_KEY."
             )
         return findings
 
