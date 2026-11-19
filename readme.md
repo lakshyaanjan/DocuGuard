@@ -31,6 +31,17 @@ python app.py --llm-mode off --html-out docuguard-report.html --json-out docugua
 
 Open the generated HTML file in a browser.
 
+## Browser interface (mentor-friendly)
+
+Run the Streamlit interface locally:
+
+~~~powershell
+python -m pip install -r requirements.txt
+python -m streamlit run web_app.py
+~~~
+
+Open the local URL shown by Streamlit (normally http://localhost:8501). The interface accepts a public GitHub code repository URL or a local Git checkout, supports separate documentation sources, and exports HTML/JSON reports. See [WEB_APP_QUICKSTART.md](WEB_APP_QUICKSTART.md) for the testing workflow and comparison-reference explanation. The web interface currently uses deterministic checks only.
+
 ## Run the end-to-end demo
 
 ~~~powershell
@@ -162,4 +173,4 @@ See docs/LLM_AND_SEMANTIC_DETECTION.md for the semantic pipeline, configuration,
 - Retrieval uses an in-memory BM25-style ranker plus a local embedding cache, not a hosted vector database.
 - Deterministic analysis is strongest for Python scalar/configuration changes and argparse flags; generic multi-language changes are model-assisted and need validation.
 - Historical replay mines candidate pairs but does not establish ground truth by itself.
-- A frontend is not included in this CLI/Actions release.
+- The Streamlit browser interface is available; see WEB_APP_QUICKSTART.md.
