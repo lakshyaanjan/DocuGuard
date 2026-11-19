@@ -2,115 +2,132 @@
 
 **Catch documentation that a code change made wrong.**
 
-DocuGuard is a GitHub Actions check that compares changed Python code with Markdown, reStructuredText and HTML documentation. It reports likely stale passages with the documentation location, corresponding code change, confidence and (when safe) a proposed correction.
+DocuGuard is a pull-request documentation drift checker. It examines code changes, retrieves the documentation passages most likely to describe those changes, and reports whether the passages have become stale. Each finding points back to the exact documentation file/line and the changed code file/line.
 
-## Current capabilities
+## What it does
 
-- Renamed or removed literal argparse command-line flags.
-- Changed simple Python scalar defaults: integers, decimals, strings, booleans and negative numbers.
-- Added or removed keys in simple, single-line Python dictionary configuration assignments, when existing entries establish a relationship to the documentation.
-- Markdown table rows are extracted with source line numbers.
-- Historical references and low-confidence matches are routed for human review.
-- Suggestions only replace a unique, complete value. DocuGuard does not edit documentation automatically.
+- Detects removed or renamed literal argparse command-line flags.
+- Detects changed simple Python scalar defaults and selected configuration dictionary changes.
+- Uses lexical retrieval and (when configured) semantic embeddings to connect changed source files to documentation sentences and Markdown table rows.
+- Uses an optional OpenAI model to judge whether a retrieved passage is actually inaccurate, rather than treating every keyword match as drift.
+- Labels uncertain and historical passages for human review.
+- Produces HTML and JSON reports, GitHub Actions annotations, and a Markdown job summary.
+- Proposes corrections when evidence supports one. It never modifies, commits, or pushes documentation automatically.
+- Ingests local projects, GitHub repositories, ZIP archives, separate docs checkouts, and bounded public static HTML docs sites into provenance-preserving snapshots.
 
-## Run locally
+The semantic mapper supports common source extensions, but language understanding is model-assisted and best-effort. Deterministic checks remain deliberately narrow and explainable.
 
-Requirements: Python 3.10+ and Git.
+## Quick start
 
-    git clone https://github.com/lakshyaanjan/DocuGuard.git
-    cd DocuGuard
-    python -m unittest discover -s tests -v
-    python app.py
+Requirements: Python 3.10+ and Git. The LLM layer is optional.
 
-Generate reports:
+~~~powershell
+git clone https://github.com/lakshyaanjan/DocuGuard.git
+cd DocuGuard
+python -m unittest discover -s tests -v
+python app.py --llm-mode off --html-out docuguard-report.html --json-out docuguard-report.json
+~~~
 
-    python app.py --html-out docuguard-report.html --json-out docuguard-report.json
+Open the generated HTML file in a browser.
 
-Open docuguard-report.html in a browser for a self-contained responsive report. To analyse another checked-out Git repository, pass --repo PATH. If the code and docs are in different local checkouts, pass both --repo PATH and --docs-path PATH.
+## Run the end-to-end demo
 
-## GitHub Actions user experience
+~~~powershell
+python examples/run_demo.py
+~~~
 
-The pull-request workflow runs tests, analyses changes against the PR base, writes inline annotations to affected documentation lines, publishes a Markdown job summary, and uploads a downloadable HTML/JSON report artifact. Likely drift fails the check; historical or ambiguous references are visible as review notices without automatically failing the PR.
+This creates a temporary Git project, changes the code's default port from 8000 to 9090, leaves the README stale, and runs DocuGuard. It produces a self-contained HTML report and a JSON report under demo-output/.
 
-## How it works
+For an offline deterministic demo:
 
-1. Git diff identifies added and removed source lines.
-2. Python AST parsing extracts changed assignments; an argparse analyser extracts literal CLI flags.
-3. The documentation crawler discovers supported docs. The extractor keeps prose and Markdown table rows with line numbers while ignoring fenced code blocks.
-4. The relationship engine combines identifier terms, a small explainable terminology map, value evidence and a check for explicitly named unrelated services.
-5. The drift detector separates likely drift from historical references.
-6. The suggestion engine proposes only safe literal replacements; ambiguous dictionary-option table changes require a maintainer to add or remove a row manually.
+~~~powershell
+python examples/run_demo.py --llm-mode off
+~~~
 
-## Separate documentation checkout
+## Enable semantic LLM review
 
-DocuGuard can read documentation from a different local checkout:
+Create an OpenAI API key and set it in your terminal. Do not commit the key.
 
-    python app.py --repo ../project-source --docs-path ../project-docs --html-out report.html
+~~~powershell
+$env:OPENAI_API_KEY = "YOUR_API_KEY"
+python app.py --repo ..\your-project --llm-mode auto --html-out report.html --json-out report.json
+~~~
 
-For a private documentation repository in GitHub Actions, add a checkout step for that repository and provide an appropriately scoped token through repository secrets. Do not hard-code a token in the workflow. Remote websites are not crawled directly; check out or export their source files first.
+The default LLM model is gpt-6.2-astra and the default embedding model is text-embedding-3-small. Change them with DOCUGUARD_LLM_MODEL and DOCUGUARD_EMBEDDING_MODEL when needed.
+
+Analysis modes:
+
+| Mode | Behavior |
+|---|---|
+| auto | Uses embeddings and LLM review when a key is available; retains deterministic results with a warning on model/API failure |
+| off | Runs deterministic checks only; no API requests |
+| required | Requires the model API and fails clearly if it is unavailable |
+
+Use --no-embeddings to keep the LLM judge but retrieve candidates lexically.
+
+For GitHub Actions, add a repository secret named OPENAI_API_KEY under **Settings -> Secrets and variables -> Actions**. The PR workflow passes this secret to DocuGuard. Without the secret, the workflow safely runs deterministic checks only.
+
+Configuration:
+
+| Environment variable | Default | Purpose |
+|---|---|---|
+| OPENAI_API_KEY | unset | OpenAI API key |
+| DOCUGUARD_OPENAI_API_KEY | unset | Alternative API key name |
+| DOCUGUARD_OPENAI_BASE_URL | https://api.openai.com/v1 | API base URL |
+| DOCUGUARD_LLM_MODEL | gpt-6.2-astra | Responses API model |
+| DOCUGUARD_EMBEDDING_MODEL | text-embedding-3-small | Embeddings model |
+| DOCUGUARD_USE_EMBEDDINGS | true | Enable semantic-vector retrieval |
+| DOCUGUARD_CACHE_DIR | ~/.cache/docuguard | Local embedding cache |
+| DOCUGUARD_LLM_MODE | auto | Default analysis mode |
+
+The semantic stage uses bounded retrieval: by default, up to eight changed source files and eight candidate documentation passages per file are sent to the model. Documentation embeddings are cached locally outside the repository by model and content hash. Exact citation paths and line numbers come from DocuGuard's extractors, not model output.
+
+## Analyse separate documentation sources
+
+~~~powershell
+python app.py --repo ..\source --docs-path ..\documentation
+python app.py --repo ..\source --docs-url https://github.com/owner/docs --docs-branch main
+python app.py --repo ..\source --docs-zip .\docs.zip
+python app.py --repo ..\source --docs-website https://docs.example.com/
+~~~
+
+GitHub docs repositories can be private when DOCUGUARD_GITHUB_TOKEN is configured with read-only access. Website crawling is restricted to bounded public static HTML on the submitted same origin. It rejects private-address resolutions and cross-origin redirects; JavaScript-rendered/authenticated sites are not supported.
+
+## Repository ingestion and snapshots
+
+DocuGuard includes a standalone ingestion/data-organisation layer for downstream analysis:
+
+~~~powershell
+python -m docuguard.ingestion --repo ..\your-project --project-name Demo
+python -m docuguard.ingestion --repo ..\your-project --docs-path ..\your-docs
+python -m docuguard.ingestion --repo-url https://github.com/owner/project --branch main
+python -m docuguard.ingestion --repo-zip .\source.zip --docs-zip .\docs.zip
+python -m docuguard.ingestion --repo ..\your-project --docs-website https://docs.example.com/
+~~~
+
+Versioned snapshots are stored below .docuguard/index/ and preserve chunks, content hashes, source commit metadata, file paths, symbols, sections, and line ranges. See docs/INGESTION_AND_DATA_MODEL.md for the schema and safety limits.
 
 ## Historical replay
 
-The history replay command finds docs-only commits with a nearby earlier source change, checks out the original code-change commit in a temporary Git worktree, and runs the current DocuGuard against that historical code state:
+The GitHub Actions workflow **DocuGuard Historical Replay Evaluation** replays candidate code-change/docs-only-fix pairs from two public projects: pallets/click and encode/httpx. Start it manually in the Actions tab and inspect both reports.
 
-    python -m docuguard.history_replay --repo ../pallets-click --window-days 30 --max-pairs 20
-    python -m docuguard.history_replay --repo ../httpx --window-days 30 --max-pairs 20
+The candidate match rate is a heuristic, not formal precision or recall. A docs-only commit close to a source change may be unrelated. Review candidate pairs before reporting a score.
 
-It writes JSON and Markdown reports. The reported candidate match rate is a heuristic, not formal recall or precision: a docs-only commit near a code change is not guaranteed to be a drift fix. Review candidate pairs and findings before presenting the metric.
+## Design and safety
 
-## Run the public historical-replay evaluation
+- LLM output is treated as a probabilistic review, not ground truth.
+- Retrieved code and documentation are untrusted input, not instructions.
+- Model outputs cannot choose the file paths or line numbers cited in reports.
+- Historical and ambiguous cases are sent for human review.
+- Suggestions are proposals only. No automatic document edits or Git pushes occur.
+- API credentials are read from environment variables and are not written to the index or repository.
 
-Open the GitHub **Actions** tab and select **DocuGuard Historical Replay Evaluation**. Choose **Run workflow** and select the time window and candidate limit. The workflow checks out full Git history for `pallets/click` and `encode/httpx`, runs the replay tool against both projects, writes a combined Actions summary, and uploads the JSON/Markdown reports as an artifact.
+See docs/LLM_AND_SEMANTIC_DETECTION.md for the semantic pipeline, configuration, and limitations. See docs/INGESTION_AND_DATA_MODEL.md for the ingestion snapshot format.
 
-The report's candidate match rate is a heuristic, not formal recall or precision. Inspect the listed code/docs commit pairs before citing any metric. A docs-only commit near a code change may be unrelated.
+## Current limitations
 
-## Limitations
-
-- Python scalar assignments and configuration dictionaries currently need to be simple assignments on changed lines. Dictionary option detection currently supports literal dictionaries on one line.
-- CLI extraction focuses on literal positional strings passed to argparse.add_argument.
-- Docs are crawled from the same checked-out repository. Separate documentation repositories and remote websites are not indexed.
-- Semantic embeddings, persistent/incremental indexing and broad language support are not implemented.
-- The terminology map is small and explainable; it is not general natural-language understanding.
-- Historical PR replay and evaluation on two or more external repositories remain future work.
-
-## Safety
-
-- DocuGuard never commits or edits documentation automatically.
-- It does not post comments to third-party repositories.
-- Every finding includes documentation and code evidence.
-- Low-confidence and historical cases are routed to maintainers.
-- HTML and JSON reports remain local or as GitHub Actions artifacts.
-
-## Project layout
-
-    docuguard/
-      cli_analyzer.py
-      code_indexer.py
-      content_extractor.py
-      document_crawler.py
-      drift_detector.py
-      git_analyzer.py
-      relationship_engine.py
-      reporting.py
-      suggestion_engine.py
-      value_utils.py
-    tests/
-    .github/workflows/docuguard.yml
-    app.py
-
-Add the license chosen by the project maintainers before public release.
-## Ingest a project for future RAG analysis
-
-DocuGuard now includes a separate ingestion prototype. It can read a local checkout, an HTTPS GitHub repository, or a ZIP archive, and can take documentation from the same or a separate source:
-
-```bash
-python -m docuguard.ingestion --repo ../my-project --project-name MyProject
-python -m docuguard.ingestion --repo ../my-project --docs-path ../my-project-docs
-python -m docuguard.ingestion --repo-url https://github.com/owner/project --branch main
-python -m docuguard.ingestion --repo-zip ./source.zip --docs-zip ./docs.zip
-python -m docuguard.ingestion --repo ../my-project --docs-website https://docs.example.com/
-```
-
-The default output is `.docuguard/index/<project_id>/<snapshot_id>/`, containing `manifest.json`, `files.jsonl`, `chunks.jsonl`, `summaries.jsonl` and `project_summary.json`. Chunks preserve file paths, line ranges, source commit IDs and content hashes. Markdown/RST/HTML prose, tables and code examples are extracted; public static documentation sites can be crawled with a bounded same-origin HTML fetch; Python functions, classes, assignments, comments and docstrings are indexed; common non-Python source comments and bounded code blocks are collected on a best-effort basis.
-
-Per-file summaries are currently extractive, not AI-generated. No embeddings, vector database or LLM are used yet. See [the ingestion/data model guide](docs/INGESTION_AND_DATA_MODEL.md) for the storage schema, safety limits and future webpage/RAG integration contract.
+- Semantic analysis depends on an API key, network access, model availability and the quality of retrieved passages.
+- Retrieval uses an in-memory BM25-style ranker plus a local embedding cache, not a hosted vector database.
+- Deterministic analysis is strongest for Python scalar/configuration changes and argparse flags; generic multi-language changes are model-assisted and need validation.
+- Historical replay mines candidate pairs but does not establish ground truth by itself.
+- A frontend is not included in this CLI/Actions release.
