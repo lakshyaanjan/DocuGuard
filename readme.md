@@ -74,7 +74,7 @@ To enable Gemini embeddings as well, set DOCUGUARD_USE_EMBEDDINGS to true and re
 
 For an OpenAI API key, set OPENAI_API_KEY and use the default API base/model, or configure DOCUGUARD_OPENAI_BASE_URL and DOCUGUARD_LLM_MODEL for another provider that supports Chat Completions structured outputs and embeddings.
 
-For GitHub Actions, add the relevant provider key as a repository secret. For Gemini, add `GEMINI_API_KEY`, then add repository variables `DOCUGUARD_OPENAI_BASE_URL` and `DOCUGUARD_LLM_MODEL` with the Gemini values above. The historical replay workflow uses `required` mode so provider failures are reported rather than silently falling back.
+Routine pull-request checks run deterministic/offline to avoid spending provider quota on every code review. For Gemini-powered historical replay, add `GEMINI_API_KEY` as a repository secret and add repository variables `DOCUGUARD_OPENAI_BASE_URL` and `DOCUGUARD_LLM_MODEL` with the Gemini values above.
 
 Analysis modes:
 
