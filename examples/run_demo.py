@@ -39,7 +39,7 @@ def create_demo_repository(root: Path) -> None:
     )
     (root / "README.md").write_text(
         "# Server setup\n\n"
-        "The HTTP application listens on port 8000 by default.\n\n"
+        "The application listens on port 8000 by default.\n\n"
         "## Historical note\n\n"
         "Previously, the application listened on port 8000 before the v2 release.\n",
         encoding="utf-8",
